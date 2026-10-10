@@ -1,7 +1,8 @@
 name: Deploy
 
-# Runs after CI passes on main, or manually. Does nothing until the AWS variables are set
+# Runs after CI passes on main, or manually. Does nothing until EC2_INSTANCE_ID is set
 # (Settings -> Secrets and variables -> Actions -> Variables), so forks and fresh clones stay green.
+# Auth: OIDC role if AWS_DEPLOY_ROLE_ARN is set, otherwise the deploy IAM user's key from secrets.
 on:
   workflow_run:
     workflows: [CI]
@@ -16,11 +17,11 @@ concurrency:
 jobs:
   deploy:
     if: >-
-      vars.AWS_DEPLOY_ROLE_ARN != '' &&
+      vars.EC2_INSTANCE_ID != '' &&
       (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     permissions:
-      id-token: write # OIDC token for AWS, no stored keys
+      id-token: write # OIDC token for AWS (unused in the IAM user mode)
       contents: read
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
@@ -32,9 +33,19 @@ jobs:
         with:
           ref: ${{ env.IMAGE_TAG }}
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: AWS credentials (OIDC role)
+        if: vars.AWS_DEPLOY_ROLE_ARN != ''
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: AWS credentials (deploy IAM user)
+        if: vars.AWS_DEPLOY_ROLE_ARN == ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
 
       - id: ecr

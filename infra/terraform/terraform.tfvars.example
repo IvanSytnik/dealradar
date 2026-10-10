@@ -1,8 +1,11 @@
 # cp terraform.tfvars.example terraform.tfvars
 alert_email = "you@example.com"
 
+# Accounts where an SCP blocks creating the GitHub OIDC provider (AWS Free plan / new experience)
+# github_deploy_auth = "iam_user"
+
 # Optional overrides
-# region            = "eu-central-1"
+# region            = "eu-north-1"
 # instance_type     = "t4g.micro"
 # budget_usd        = 15
 # github_repository = "IvanSytnik/dealradar"

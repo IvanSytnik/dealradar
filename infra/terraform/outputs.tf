@@ -9,8 +9,13 @@ output "ecr_repository" {
 }
 
 output "github_deploy_role_arn" {
-  description = "Set as GitHub variable AWS_DEPLOY_ROLE_ARN."
-  value       = aws_iam_role.github_deploy.arn
+  description = "github_deploy_auth = oidc: set as GitHub variable AWS_DEPLOY_ROLE_ARN."
+  value       = one(aws_iam_role.github_deploy[*].arn)
+}
+
+output "github_deploy_user" {
+  description = "github_deploy_auth = iam_user: create its access key and store it as GitHub secrets."
+  value       = one(aws_iam_user.github_deploy[*].name)
 }
 
 output "region" {
