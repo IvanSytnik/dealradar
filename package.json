@@ -1,0 +1,32 @@
+{
+  "name": "dealradar",
+  "version": "2.0.0",
+  "description": "Telegram bot that watches marketplace searches (Willhaben first) and sends only relevant new listings, filtered by rules and AI",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.60.0",
+    "better-sqlite3": "^11.10.0",
+    "dotenv": "^16.6.1",
+    "grammy": "^1.46.0",
+    "tsx": "^4.23.15",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}
