@@ -48,7 +48,7 @@ npm start
 The bot uses Telegram long polling: it needs no public URL or open port, only an always-on process and a small persistent disk for SQLite. **Run exactly one instance** (stop the local one first), otherwise Telegram answers `409 Conflict`.
 
 ### AWS (Terraform + GitHub Actions)
-EC2 Graviton + Docker, ECR, GitHub OIDC deploys through SSM Run Command, secrets in SSM Parameter Store, CloudWatch Logs, budget alerts, no inbound ports. See [docs/aws.md](docs/aws.md) for the architecture, decisions, cost (~$12/month) and setup.
+EC2 Graviton + Docker, ECR, GitHub Actions deploys through SSM Run Command (OIDC, or a scoped IAM user where an SCP blocks OIDC), secrets in SSM Parameter Store, CloudWatch Logs, budget alerts, no inbound ports. See [docs/aws.md](docs/aws.md) for the architecture, decisions, cost (~$12/month) and setup.
 
 ### Railway (simplest, deploys on every push)
 1. railway.com → New Project → Deploy from GitHub repo → pick this repo. It builds the `Dockerfile` (see `railway.json`).
