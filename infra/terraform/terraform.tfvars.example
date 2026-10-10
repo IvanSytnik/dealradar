@@ -1,0 +1,8 @@
+# cp terraform.tfvars.example terraform.tfvars
+alert_email = "you@example.com"
+
+# Optional overrides
+# region            = "eu-central-1"
+# instance_type     = "t4g.micro"
+# budget_usd        = 15
+# github_repository = "IvanSytnik/dealradar"
