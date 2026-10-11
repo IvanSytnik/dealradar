@@ -5,6 +5,7 @@ Paste a Willhaben search link (or just type `ps5 digital`). The bot works out wh
 
 ## Features
 
+- **Four languages:** German, English, Ukrainian, Russian. Picked from the Telegram app language, changeable with `/lang` (the choice then sticks). The AI writes its item description, reasons and notes in the same language; the HTML report and the command menu are localised too. Locales are type-checked against the reference, and a test renders every string to check that its Telegram HTML is balanced.
 - **Onboarding in one tap.** `/start` explains the bot in two lines and offers example searches (PS5, iPhone 13, E-Bike) that create a watch immediately; `/help` is split into topics, including how to copy a search link from the Willhaben app.
 - **Link in, watch out.** The bot accepts any Willhaben search URL (keyword, category, region, price) or plain text. It canonicalises the URL to newest first and strips tracking params.
 - **Auto filter profile.** The AI reads the query and returns match groups (`series s | xbox s | xss`), exclusions (other models, cases, games), accessory words (fine in a bundle, not alone) and a sane price range. All of it is plain words, never regexes, and validated with zod. Without AI there is a deterministic fallback.
@@ -28,6 +29,7 @@ src/
   db/           SQLite migrations (user_version) + repository
   services/     WatchService (create/preview/edit), Poller (scheduler), Notifier port
   bot/          grammY handlers, pure command parsers, message formatting
+  i18n/         de / en / uk / ru dictionaries (ru is the reference type)
 tests/          vitest: unit, service, scheduler with fake clock, bot end-to-end
 ```
 
@@ -83,6 +85,7 @@ Update: `git pull && docker compose up -d --build`. Data lives in `./data`.
 | `/rename 3 Name` | |
 | `/scan 3` | market analysis of all pages (also the 📊 button in the watch card) |
 | `/plan` | plan and usage |
+| `/lang` | language |
 | `/stats`, `/grant <id> pro` | admin |
 
 Deep link `t.me/<bot>?start=<base64url keyword>` creates a watch straight from a landing page.
@@ -98,9 +101,8 @@ Deep link `t.me/<bot>?start=<base64url keyword>` creates a watch straight from a
 
 1. **Payments:** Telegram Stars (`sendInvoice`, currency `XTR`) for Pro, monthly subscription, `pre_checkout_query` handler, plan expiry column.
 2. **More sites:** Kleinanzeigen.de, eBay, Vinted, Avito; per-site lexicons; one watch across several sites.
-3. **i18n:** de/en/uk/ru by `language_code`; strings are already isolated in `bot/format.ts`.
-4. **Price intelligence:** keep listing history per query to show "15% below the median for the last 30 days", which gives a better deal score than the model's guess.
-5. **Speed as a paid feature:** Pro checks every minute; later, priority queue and proxy pool.
-6. **Scale:** move from SQLite to Postgres and run the poller as separate workers with a job queue once there are more than ~2k active watches; Telegram webhook instead of long polling.
-7. **Observability:** Sentry, uptime ping, a parser-health alert when a site returns 0 listings for every watch.
-8. **Growth:** referral deep links (`?start=ref_<id>`) giving bonus Pro days; shareable watches.
+3. **Price intelligence:** keep listing history per query to show "15% below the median for the last 30 days", which gives a better deal score than the model's guess.
+4. **Speed as a paid feature:** Pro checks every minute; later, priority queue and proxy pool.
+5. **Scale:** move from SQLite to Postgres and run the poller as separate workers with a job queue once there are more than ~2k active watches; Telegram webhook instead of long polling.
+6. **Observability:** Sentry, uptime ping, a parser-health alert when a site returns 0 listings for every watch.
+7. **Growth:** referral deep links (`?start=ref_<id>`) giving bonus Pro days; shareable watches.
