@@ -676,6 +676,24 @@ export function createBot(deps: {
 }
 
 /** Command menu per Telegram app language; "en" is also the default for every other locale. */
+export const BOT_NAME = "DealRadar";
+
+/**
+ * Name, description (the "What can this bot do?" screen of an empty chat) and short description
+ * (profile and share card), per language, from the locales. Only what differs is sent: setMyName
+ * in particular has a tight rate limit, and this runs on every deploy.
+ */
+export async function registerProfile(bot: Bot) {
+  if ((await bot.api.getMyName()).name !== BOT_NAME) await bot.api.setMyName(BOT_NAME);
+  for (const lang of [...LANGS, null]) {
+    const T = t(lang ?? "en");
+    const opts = lang ? { language_code: lang } : {};
+    if ((await bot.api.getMyDescription(opts)).description !== T.botDescription) await bot.api.setMyDescription(T.botDescription, opts);
+    if ((await bot.api.getMyShortDescription(opts)).short_description !== T.botShortDescription)
+      await bot.api.setMyShortDescription(T.botShortDescription, opts);
+  }
+}
+
 export async function registerCommands(bot: Bot) {
   for (const lang of LANGS) {
     const T = t(lang);

@@ -248,6 +248,14 @@ Your plan and usage: /plan`,
   cmdPlan: "Plan and limits",
   cmdLang: "Language",
   cmdHelp: "Help",
+  // Telegram profile (set via the Bot API at startup): short ≤ 120 chars, description ≤ 512
+  botShortDescription: "New Willhaben and Kleinanzeigen listings without the junk, with a market price check for each model",
+  botDescription: `DealRadar watches your searches on willhaben.at 🇦🇹 and kleinanzeigen.de 🇩🇪 and sends only the new listings you actually want: no accessories, swaps or junk.
+
+📊 Tells you right away if a listing is below market, per model: a PS5 Pro is compared with Pros, a Digital with Digitals.
+🔎 Market analysis: every page of a search in one filterable report.
+
+Tap Start, send a search link or just type what you're looking for.`,
 
   privacy: (contact) => `🔒 <b>Data and privacy</b>
 

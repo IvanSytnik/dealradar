@@ -2,7 +2,7 @@ import { BatchClassifier } from "./ai/batch.js";
 import { Classifier } from "./ai/classifier.js";
 import { ScanService } from "./services/scan.js";
 import { createAnthropicLlm } from "./ai/llm.js";
-import { createBot, createTelegramNotifier, registerCommands } from "./bot/bot.js";
+import { createBot, createTelegramNotifier, registerCommands, registerProfile } from "./bot/bot.js";
 import { loadConfig } from "./config.js";
 import { openDb, Repo } from "./db/repo.js";
 import { logger } from "./logger.js";
@@ -44,6 +44,7 @@ const poller = new Poller(repo, http, classifier, notifier, Date.now, health);
 async function main() {
   // Cosmetic (command menu): never block startup on it
   void registerCommands(bot).catch((e) => logger.warn("setMyCommands failed", { err: (e as Error).message }));
+  void registerProfile(bot).catch((e) => logger.warn("bot profile update failed", { err: (e as Error).message }));
   poller.start(config.TICK_SECONDS);
   logger.info("started", { ai: llm ? config.AI_MODEL : "off", db: config.DB_PATH, reports: reports ? "s3" : "file" });
   await bot.start({ drop_pending_updates: true, allowed_updates: ["message", "callback_query"] });

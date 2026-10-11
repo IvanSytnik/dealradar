@@ -59,6 +59,14 @@ describe("i18n", () => {
     for (const text of render(t(l))) expect(text, text.slice(0, 80)).not.toMatch(/[А-Яа-яЁёІіЇїЄє]/);
   });
 
+  it("bot profile texts fit Telegram's limits", () => {
+    for (const l of LANGS) {
+      const T = t(l);
+      expect([...T.botShortDescription].length, l).toBeLessThanOrEqual(120);
+      expect([...T.botDescription].length, l).toBeLessThanOrEqual(512);
+    }
+  });
+
   it("button labels are short enough not to be cut on a phone (two per row)", () => {
     for (const l of LANGS) {
       const T = t(l);

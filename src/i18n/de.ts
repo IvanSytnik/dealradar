@@ -249,6 +249,14 @@ Dein Tarif und Verbrauch: /plan`,
   cmdPlan: "Tarif und Limits",
   cmdLang: "Sprache",
   cmdHelp: "Hilfe",
+  // Telegram profile (set via the Bot API at startup): short ≤ 120 chars, description ≤ 512
+  botShortDescription: "Neue Anzeigen von Willhaben und Kleinanzeigen ohne Müll, mit Marktpreis-Check für jedes Modell",
+  botDescription: `DealRadar beobachtet deine Suchen auf willhaben.at 🇦🇹 und kleinanzeigen.de 🇩🇪 und schickt dir nur die neuen Anzeigen, die du wirklich suchst: kein Zubehör, kein Tausch, kein Müll.
+
+📊 Sagt dir sofort, ob eine Anzeige unter dem Marktpreis liegt, und zwar pro Modell: eine PS5 Pro wird mit Pros verglichen, eine Digital mit Digitals.
+🔎 Marktanalyse: alle Seiten einer Suche in einem Bericht mit Filtern.
+
+Tippe auf Start, schick einen Suchlink oder schreib einfach, was du suchst.`,
 
   privacy: (contact) => `🔒 <b>Daten und Datenschutz</b>
 

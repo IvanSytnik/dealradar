@@ -268,6 +268,14 @@ export const ru = {
   cmdPlan: "Тариф и лимиты",
   cmdLang: "Язык",
   cmdHelp: "Помощь",
+  // Telegram profile (set via the Bot API at startup): short ≤ 120 chars, description ≤ 512
+  botShortDescription: "Новые объявления с Willhaben и Kleinanzeigen без мусора, с оценкой цены по рынку для каждой модели",
+  botDescription: `DealRadar следит за поиском на willhaben.at 🇦🇹 и kleinanzeigen.de 🇩🇪 и присылает только новые объявления, которые ты ищешь: без аксессуаров, обменов и мусора.
+
+📊 Сразу говорит, дешевле ли рынка, причём по каждой модели отдельно: PS5 Pro сравнивается с Pro, Digital с Digital.
+🔎 Анализ рынка: все страницы поиска в одном отчёте с фильтрами.
+
+Нажми «Старт», пришли ссылку на поиск или просто напиши, что ищешь.`,
 
   // ---------- privacy, deletion, invites ----------
   privacy: (contact: string) => `🔒 <b>Данные и приватность</b>
