@@ -74,6 +74,7 @@ main{max-width:1100px;margin:0 auto;padding:24px 16px 64px}h1{font-size:22px;mar
 ol.hl{padding-left:22px}ol.hl li{margin:6px 0}a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
 .chips{display:none;flex-wrap:wrap;gap:6px;margin:8px 0 12px}.js .chips{display:flex}
 th[data-k]{cursor:default}.js th[data-k]{cursor:pointer}.js th[data-k]::after{content:" ↕";opacity:.5}
+.tg main{padding-top:12px}
 .nojs{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:10px 12px;margin:8px 0 12px;font-size:14px}.js .nojs{display:none}.chip{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:999px;padding:4px 10px;cursor:pointer;font:inherit;font-size:13px}
 .chip[aria-pressed=true]{border-color:var(--acc);color:var(--acc)}
 .wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--card)}
@@ -110,6 +111,25 @@ ${r.items.map((i, n) => row(t, i, n + 1)).join("\n")}
 <footer>${esc(R.footer(r.ruleDropped.length, r.aiDropped.length, r.aiUnchecked))}</footer>
 </main>
 <script>
+/* Telegram Mini App: Telegram opens this page with #tgWebAppThemeParams=... in the hash.
+   Take its colours, tell the client we are ready, expand to full height, open listings outside. */
+(function(){
+  try{
+    var h=new URLSearchParams(location.hash.slice(1)),tp=h.get('tgWebAppThemeParams');
+    if(!tp)return;
+    var post=function(e,d){var data=JSON.stringify(d||{});
+      if(window.TelegramWebviewProxy)window.TelegramWebviewProxy.postEvent(e,data);
+      else if(window.external&&'notify' in window.external)window.external.notify(JSON.stringify({eventType:e,eventData:d||{}}));
+      else if(window.parent!==window)window.parent.postMessage(JSON.stringify({eventType:e,eventData:d||{}}),'*');};
+    var p=JSON.parse(tp),r=document.documentElement.style;
+    var map={bg_color:'--bg',text_color:'--fg',hint_color:'--muted',link_color:'--acc',secondary_bg_color:'--card',section_separator_color:'--line'};
+    for(var k in map)if(p[k])r.setProperty(map[k],p[k]);
+    document.documentElement.className+=' tg';
+    document.addEventListener('click',function(ev){var a=ev.target.closest&&ev.target.closest('a[href^="http"]');
+      if(a){ev.preventDefault();post('web_app_open_link',{url:a.href});}});
+    post('web_app_ready');post('web_app_expand');
+  }catch(e){}
+})();
 (function(){
   document.documentElement.className+=' js';
   var tb=document.querySelector('#t tbody');var dir={};

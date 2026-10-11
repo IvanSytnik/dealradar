@@ -62,7 +62,8 @@ export const de: Dict = {
   btnConfirmDelete: "Ja, löschen",
   btnCancel: "Abbrechen",
   btnYes: "✅ Ja",
-  btnOpenReport: "🌐 Ganzen Bericht öffnen",
+  btnOpenReport: "🌐 Im Browser öffnen",
+  btnOpenReportApp: "📱 Bericht öffnen",
 
   previewHead: (total, n) => `Gerade ${total} Anzeigen online, <b>${n}</b> passen zum Filter.`,
   previewAiChecked: (n) => `<i>Die KI hat ${n} der durch die Regeln gekommenen geprüft.</i>`,
@@ -129,12 +130,14 @@ export const de: Dict = {
   listTitle: (n, max) => `<b>Deine Suchaufträge</b> (${n}/${max})`,
   creating: "🔎 Ich schaue mir die Suche an und richte den Filter ein…",
   errLimit: (max) => `Tariflimit: ${max} Suchaufträge. Lösch einen in /list oder wechsle zu Pro (/plan).`,
-  errUnsupported: (detail) => `Derzeit wird nur Willhaben unterstützt. ${detail}`,
+  errUnsupported: (detail) => `Unterstützt werden Willhaben.at und Kleinanzeigen.de (Beta). ${detail}`,
   errBadUrl: (detail) => `Das sieht nicht nach einer Suchseite aus. Öffne eine Suche (keine einzelne Anzeige) und schick den Link. ${detail}`,
   errFetch: (detail) => `Die Suche ließ sich nicht laden, bitte später nochmal. (${detail})`,
   errDuplicate: "Diese Suche beobachtest du schon, siehe /list.",
   createdAi: "✅ Fertig. Die KI hat erkannt, was du suchst, und den Filter gebaut:",
   createdFallback: (aiConfigured) => `✅ Fertig. Filter aus den Suchwörtern${aiConfigured ? " (die KI hat nicht geantwortet, prüf die Regeln)" : ""}:`,
+  betaSite: (name) =>
+    `🧪 <b>${name}</b> läuft als Beta: Der Parser wird an der echten Seite noch geprüft. Wenn keine Benachrichtigungen kommen oder Müll dabei ist, tippe 👎 oder schreib an den Kontakt aus /privacy.`,
   seededNote: "Die aktuellen Anzeigen habe ich mir gemerkt. Du bekommst nur neue und Preissenkungen.",
   confirmKeyword: (kw) =>
     `„<b>${kw}</b>“ auf Willhaben in ganz Österreich beobachten?\n<i>Für Region, Kategorie oder Preis schick lieber einen Suchlink mit diesen Filtern.</i>`,
@@ -203,6 +206,8 @@ Für den Start reicht ein Suchbegriff (<code>ps5 digital</code>). Einen Link bra
 1. Öffne willhaben.at, such den Artikel, setz die Filter
 2. Kopier die Adresse aus der Adresszeile
 3. Füg sie hier ein
+
+🧪 <b>Kleinanzeigen.de</b> (Beta): genauso, ein Link zu einer Suchseite auf kleinanzeigen.de.
 
 ⚠️ Es muss ein Link zu einer <b>Suchseite</b> sein (Liste von Anzeigen), nicht zu einer einzelnen Anzeige.`,
   helpFilter: `🧹 <b>So funktioniert der Filter</b>
@@ -283,7 +288,7 @@ Dein Tarif und Verbrauch: /plan`,
     flipsNote: "Für Reparatur oder Weiterverkauf. Bewertet gegen den Preis defekter Geräte (~40 % des Medians), nicht funktionierender.",
     all: (n) => `Alle passenden (${n})`,
     sorted: "Nach Bewertung sortiert, beste zuerst.",
-    noJs: "Sortierung und Filter funktionieren in der Telegram-Vorschau nicht. Öffne den Bericht über „🌐 Ganzen Bericht öffnen“ im Chat mit dem Bot oder im Browser.",
+    noJs: "Sortierung und Filter funktionieren in der Dateivorschau nicht. Öffne den Bericht über „📱 Bericht öffnen“ im Chat mit dem Bot.",
     chipAll: "Alle",
     colListing: "Anzeige",
     colPrice: "Preis",

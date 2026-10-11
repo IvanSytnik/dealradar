@@ -61,7 +61,8 @@ export const en: Dict = {
   btnConfirmDelete: "Yes, delete",
   btnCancel: "Cancel",
   btnYes: "✅ Yes",
-  btnOpenReport: "🌐 Open full report",
+  btnOpenReport: "🌐 Open in browser",
+  btnOpenReportApp: "📱 Open report",
 
   previewHead: (total, n) => `${total} listings on the site right now, <b>${n}</b> match the filter.`,
   previewAiChecked: (n) => `<i>AI checked ${n} of those that passed the rules.</i>`,
@@ -128,12 +129,14 @@ export const en: Dict = {
   listTitle: (n, max) => `<b>Your watches</b> (${n}/${max})`,
   creating: "🔎 Looking at the search and setting up the filter…",
   errLimit: (max) => `Plan limit: ${max} watches. Delete one in /list or switch to Pro (/plan).`,
-  errUnsupported: (detail) => `Only Willhaben is supported for now. ${detail}`,
+  errUnsupported: (detail) => `Willhaben.at and Kleinanzeigen.de (beta) are supported. ${detail}`,
   errBadUrl: (detail) => `That doesn't look like a search page. Open a search (not a single listing) and send the link. ${detail}`,
   errFetch: (detail) => `Couldn't load the search, try again later. (${detail})`,
   errDuplicate: "You're already watching this search, see /list.",
   createdAi: "✅ Done. The AI worked out what you're after and built the filter:",
   createdFallback: (aiConfigured) => `✅ Done. Filter built from the search words${aiConfigured ? " (the AI didn't answer, check the rules)" : ""}:`,
+  betaSite: (name) =>
+    `🧪 <b>${name}</b> runs in beta: the parser is still being checked against the live site. If alerts don't arrive or contain junk, tap 👎 or write to the contact in /privacy.`,
   seededNote: "I've remembered the current listings. You'll only get new ones and price drops.",
   confirmKeyword: (kw) =>
     `Watch “<b>${kw}</b>” on Willhaben across Austria?\n<i>For a region, category or price, send a search link with those filters instead.</i>`,
@@ -202,6 +205,8 @@ A plain query (<code>ps5 digital</code>) is enough to start. Use a link when the
 1. Open willhaben.at, search, set the filters
 2. Copy the address from the address bar
 3. Paste it here
+
+🧪 <b>Kleinanzeigen.de</b> (beta): same thing, a search page link from kleinanzeigen.de.
 
 ⚠️ It has to be a link to a <b>search page</b> (a list of listings), not to a single listing.`,
   helpFilter: `🧹 <b>How the filter works</b>
@@ -282,7 +287,7 @@ Your plan and usage: /plan`,
     flipsNote: "For repair or resale. Scored against the price of broken units (~40% of the median), not working ones.",
     all: (n) => `All matching (${n})`,
     sorted: "Sorted by deal score, best first.",
-    noJs: "Sorting and filters don't work in Telegram's built-in preview. Open the report with “🌐 Open full report” in the bot chat, or in a browser.",
+    noJs: "Sorting and filters don't work in the built-in file preview. Open the report with “📱 Open report” in the bot chat.",
     chipAll: "All",
     colListing: "Listing",
     colPrice: "Price",

@@ -6,7 +6,7 @@ import { WatchService } from "../src/services/watches.js";
 import { ScanService } from "../src/services/scan.js";
 import { BatchClassifier } from "../src/ai/batch.js";
 import type { ReportPublisher } from "../src/report/publish.js";
-import { fakeHttp, memRepo, willhabenHtml } from "./helpers.js";
+import { fakeHttp, kleinanzeigenHtml, memRepo, willhabenHtml } from "./helpers.js";
 
 const USER = { id: 42, is_bot: false, first_name: "Ivan", username: "ivan", language_code: "ru" };
 const CHAT = { id: 42, type: "private" as const, first_name: "Ivan" };
@@ -15,8 +15,13 @@ const LINK = "https://www.willhaben.at/iad/kaufen-und-verkaufen/marktplatz?keywo
 function setup(opts: { admin?: boolean; reports?: ReportPublisher; langCode?: string } = {}) {
   const from = { ...USER, language_code: opts.langCode ?? USER.language_code };
   const repo = memRepo();
-  const http = fakeHttp(() =>
-    willhabenHtml([
+  const http = fakeHttp((url) =>
+    url.includes("kleinanzeigen.de")
+      ? kleinanzeigenHtml([
+          { id: 11, title: "Xbox Series S", price: "190 € VB" },
+          { id: 12, title: "Xbox Series S Controller", price: "25 €" },
+        ])
+      : willhabenHtml([
       { id: 1, title: "Xbox Series S", price: 170 },
       { id: 2, title: "Xbox Series S 512GB", price: 230 },
       { id: 3, title: "Xbox Series S weiß", price: 250 },
@@ -152,6 +157,16 @@ describe("bot end-to-end", () => {
     expect(s.repo.getWatch(id)!.profile.allowDefect).toBe(false);
   });
 
+  it("a Kleinanzeigen link creates a watch and says the site is in beta", async () => {
+    const s = setup();
+    await s.text("https://www.kleinanzeigen.de/s-konsolen/seite:2/xbox-series-s/k0c279");
+    const w = s.repo.listWatches(42)[0]!;
+    expect(w.query).toMatchObject({ site: "kleinanzeigen", url: "https://www.kleinanzeigen.de/s-konsolen/xbox-series-s/k0c279" });
+    const all = s.texts().join("\n");
+    expect(all).toMatch(/Xbox Series S · 190 €/);
+    expect(all).toMatch(/бета-режиме/);
+  });
+
   it("plain text asks for confirmation, then creates", async () => {
     const s = setup();
     await s.text("ps5 digital");
@@ -224,7 +239,11 @@ describe("bot end-to-end", () => {
     await s.idle();
     expect(published[0]).toMatch(/<!doctype html>/);
     const summary = s.sent.find((x) => x.method === "sendMessage" && /Просмотрено/.test(x.payload.text));
-    expect(summary?.payload.reply_markup.inline_keyboard[0][0]).toEqual({ text: "🌐 Открыть полный отчёт", url: "https://reports.example/r/abc.html" });
+    // opens inside Telegram as a Mini App, with the browser as a fallback
+    expect(summary?.payload.reply_markup.inline_keyboard).toEqual([
+      [{ text: "📱 Открыть отчёт", web_app: { url: "https://reports.example/r/abc.html" } }],
+      [{ text: "🌐 Открыть в браузере", url: "https://reports.example/r/abc.html" }],
+    ]);
     expect(s.sent.find((x) => x.method === "sendDocument")).toBeDefined();
   });
 

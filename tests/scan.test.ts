@@ -205,6 +205,9 @@ describe("HTML report", () => {
     expect(html).toMatch(/\.chips\{display:none/);
     expect(html).toContain('class="nojs"');
     expect(html).toContain("documentElement.className+=' js'");
+    // as a Telegram Mini App it takes the theme from the URL hash and asks to expand
+    expect(html).toContain("tgWebAppThemeParams");
+    expect(html).toContain("web_app_expand");
     // the same report for a German user carries no Russian
     const de = renderReport(r.report, "de");
     expect(de).toContain('<html lang="de">');

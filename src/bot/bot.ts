@@ -4,7 +4,7 @@ import { INTERVAL_CHOICES, PLANS, REFERRAL_DAYS } from "../core/plans.js";
 import type { Repo } from "../db/repo.js";
 import { detectLang, isLang, LANG_LABELS, LANGS, t, type Dict, type Lang } from "../i18n/index.js";
 import { logger } from "../logger.js";
-import { extractUrl } from "../sites/index.js";
+import { extractUrl, siteById } from "../sites/index.js";
 import { RecipientGoneError, type Notifier } from "../services/notifier.js";
 import type { WatchService } from "../services/watches.js";
 import type { ScanProgress, ScanService } from "../services/scan.js";
@@ -214,6 +214,8 @@ export function createBot(deps: {
     const head = r.profileSource === "ai" ? T.createdAi : T.createdFallback(aiEnabled);
     await reply(ctx, `${head}\n\n${profileSummary(T, r.watch)}`, watchKeyboard(T, r.watch));
     await reply(ctx, `${previewText(T, r.preview)}\n\n${T.seededNote}`);
+    const site = siteById(r.watch.query.site);
+    if (site.beta) await reply(ctx, T.betaSite(site.name));
   }
 
   // A scan takes up to a minute; one at a time per user
@@ -248,7 +250,10 @@ export function createBot(deps: {
       await ctx.api.deleteMessage(status.chat.id, status.message_id).catch(() => undefined);
       const html = renderReport(r.report, user.lang);
       const url = reports ? await reports.publish(html) : null;
-      await reply(ctx, scanSummaryText(T, r.report, { link: Boolean(url) }), url ? new InlineKeyboard().url(T.btnOpenReport, url) : undefined);
+      // Mini App first: the report opens inside Telegram with JS, the theme and a back button;
+      // the browser link is the fallback for desktop and old clients
+      const kb = url ? new InlineKeyboard().webApp(T.btnOpenReportApp, url).row().url(T.btnOpenReport, url) : undefined;
+      await reply(ctx, scanSummaryText(T, r.report, { link: Boolean(url) }), kb);
       const day = new Date(r.report.at).toISOString().slice(0, 10);
       const file = `dealradar-${w.name.replace(/[^\p{L}\p{N}]+/gu, "-").toLowerCase()}-${day}.html`;
       await ctx.replyWithDocument(new InputFile(Buffer.from(html, "utf8"), file), {
