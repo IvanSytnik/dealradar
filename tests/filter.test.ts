@@ -60,6 +60,15 @@ describe("applyRules (Xbox Series S profile)", () => {
     });
   });
 
+  it("drops services and empty boxes seen live on Kleinanzeigen, keeps broken units for repair", () => {
+    const P = { mustAny: [["ps5"]], priceMin: null, priceMax: null };
+    const t = (title: string) => applyRules(listing({ id: "1", title, price: 80 }), { ...XBOX_PROFILE, ...P });
+    expect(t("PS5 überhitzt? Reparatur & professionelle Reinigung vom Profi").pass).toBe(false);
+    expect(t("PS5 Controller TMR Hall Effect Sticks Reparatur Umbau").pass).toBe(false);
+    expect(t("Kartons Leerverpackung PS5 / Nintendo / Xbox").pass).toBe(false);
+    expect(t("PS5 Disc defekt, zur Reparatur").pass).toBe(true); // a broken unit: allowDefect decides
+  });
+
   it("applies the price range but lets unknown prices through", () => {
     expect(run("Xbox Series S", 40).reason).toMatch(/price 40 < 60/);
     expect(run("Xbox Series S", 400).reason).toMatch(/price 400 > 250/);

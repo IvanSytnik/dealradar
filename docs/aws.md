@@ -5,7 +5,7 @@ Infrastructure as code in [`infra/terraform`](../infra/terraform), continuous de
 
 ```mermaid
 flowchart LR
-  dev[git push main] --> ci[GitHub Actions: CI<br/>typecheck, 252 tests,<br/>terraform validate]
+  dev[git push main] --> ci[GitHub Actions: CI<br/>typecheck, 253 tests,<br/>terraform validate]
   ci -->|green| cd[Deploy workflow]
   cd -->|OIDC role or scoped IAM user| sts[(AWS STS)]
   cd -->|docker buildx arm64| ecr[(ECR)]

@@ -14,7 +14,16 @@ export const NOT_AN_OFFER = [
   "nur ovp",
   "nur verpackung",
   "leerkarton",
+  "leerverpackung",
   "leere ovp",
+  // services, not items: repair shops and modders flood Kleinanzeigen console searches.
+  // "reparatur" alone stays allowed: "PS5 zur Reparatur" is a broken unit, which allowDefect decides.
+  "reparaturservice",
+  "reparatur service",
+  "umbau",
+  "reinigung",
+  "modifikation",
+  "wir reparieren",
   // already gone
   "reserviert",
   "bereits verkauft",
