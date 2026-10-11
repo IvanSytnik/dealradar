@@ -16,6 +16,9 @@ Paste a Willhaben search link (or just type `ps5 digital`). The bot works out wh
 - **Price-drop alerts** with the old price struck through.
 - **Market analysis (`/scan`).** Reads every page of a search (5 on Free, 20 on Pro), filters with rules, screens the rest with the AI in batches of 20, computes the real median and quartiles, and scores each listing against them. Highlights deals, lists cheap broken units separately for repair/resale, flags suspiciously cheap ones. Sends a summary to the chat with a link to the sortable HTML report (S3 + CloudFront, 30 days), plus the file as a copy. The median is stored and used in live notifications ("18 % below the median").
 - **Plans and limits** (Free / Pro): number of watches, minimum interval, AI calls per day. Admin `/grant`.
+- **Privacy and erasure:** `/privacy` says what is stored, where (AWS Stockholm) and what goes to the AI; `/delete_me` erases the user and everything keyed by them in one transaction (GDPR Art. 17).
+- **Invites:** `/invite` gives a personal `?start=ref_<id>` link; a brand-new user who joins through it and the inviter each get 7 days of Pro (stacking, time-limited, self-invites and repeat joins ignored).
+- **Parser health alert:** every fetch outcome feeds a rolling window per site; when most recent fetches across several different searches are empty or failing (layout change, IP block), the owner gets one Telegram alert, repeated at most every 6 hours, plus a "recovered" message.
 - **Analytics** (`/stats`): signups, active users, notifications, AI calls, negative feedback.
 - **Operational safety.** One HTTP request per unique URL per cycle, however many users watch it. A per-host queue with a minimum gap between requests. Exponential backoff with jitter on errors, and the user is alerted once after 5 consecutive failures. Users who block the bot are deactivated automatically. Notifications are capped per run with a summary line.
 
@@ -86,6 +89,8 @@ Update: `git pull && docker compose up -d --build`. Data lives in `./data`.
 | `/scan 3` | market analysis of all pages (also the 📊 button in the watch card) |
 | `/plan` | plan and usage |
 | `/lang` | language |
+| `/invite` | personal invite link (+7 days Pro each) |
+| `/privacy`, `/delete_me` | what is stored; erase everything |
 | `/stats`, `/grant <id> pro` | admin |
 
 Deep link `t.me/<bot>?start=<base64url keyword>` creates a watch straight from a landing page.
@@ -104,5 +109,5 @@ Deep link `t.me/<bot>?start=<base64url keyword>` creates a watch straight from a
 3. **Price intelligence:** keep listing history per query to show "15% below the median for the last 30 days", which gives a better deal score than the model's guess.
 4. **Speed as a paid feature:** Pro checks every minute; later, priority queue and proxy pool.
 5. **Scale:** move from SQLite to Postgres and run the poller as separate workers with a job queue once there are more than ~2k active watches; Telegram webhook instead of long polling.
-6. **Observability:** Sentry, uptime ping, a parser-health alert when a site returns 0 listings for every watch.
-7. **Growth:** referral deep links (`?start=ref_<id>`) giving bonus Pro days; shareable watches.
+6. **Observability:** Sentry, uptime ping, CloudWatch alarm on the error log pattern.
+7. **Growth:** shareable watches, landing page with deep links.
