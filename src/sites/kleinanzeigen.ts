@@ -6,11 +6,10 @@ import type { SiteAdapter } from "./types.js";
 /**
  * Kleinanzeigen.de (Germany), BETA.
  *
- * Verified from outside on 2026-10-11: search URLs look like /s-konsolen/ps5/k0c279, page 2 is
- * /s-konsolen/seite:2/ps5/k0c279 (the "seite:N" segment goes right before the keyword), 25 results
- * per page plus a few promoted "TOP" ads, sorted by date by default. The HTML markup itself could not
- * be fetched from the dev environment, so the parser follows the long-standing `article.aditem`
- * structure with fallbacks, and the parser-health alert covers the rest.
+ * Verified against the live site on 2026-10-11: search URLs look like /s-konsolen/ps5/k0c279, page 2
+ * is /s-konsolen/seite:2/ps5/k0c279 (the "seite:N" segment goes right before the keyword), 25 results
+ * per page plus two promoted ads, sorted by date by default. tests/fixtures/kleinanzeigen-ps5.html is
+ * a real results page from that day (cards only, icon paths stripped).
  */
 
 const BASE = "https://www.kleinanzeigen.de";
@@ -58,6 +57,27 @@ export function parseKaPrice(raw: string): number | null {
 
 const AD_HREF = /\/s-anzeige\/[^"'\s]*?\/(\d+)-\d+-\d+/;
 
+/** Each card carries a schema.org ImageObject with the title, a description excerpt and the photo. */
+function ldJson(el: HTMLElement): { title?: string; description?: string; contentUrl?: string } {
+  const raw = el.querySelector('script[type="application/ld+json"]')?.textContent;
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Two markups are handled:
+ * - current (Tailwind, seen live on 2026-10-11): article[data-adid][data-href], title in h3 > a,
+ *   place next to the locationOutline icon, price in a <p> next to a struck-through old price,
+ *   JSON-LD with title/description/photo;
+ * - the long-standing one: article.aditem with a.ellipsis, .aditem-main--* classes.
+ */
+/** Kleinanzeigen marks wanted ads with a "Gesuch" badge: never an offer, whatever the title says. */
+const isWanted = (el: HTMLElement) => el.querySelectorAll("span, p").some((x) => x.childNodes.length <= 1 && text(x) === "Gesuch");
+
 function listingFrom(el: HTMLElement): Listing | null {
   const href =
     el.getAttribute("data-href") ??
@@ -65,23 +85,30 @@ function listingFrom(el: HTMLElement): Listing | null {
     "";
   const id = el.getAttribute("data-adid") ?? href.match(AD_HREF)?.[1] ?? null;
   if (!id || !href) return null;
+  const ld = ldJson(el);
 
-  const titleEl =
-    el.querySelector("a.ellipsis") ?? el.querySelector("h2 a") ?? el.querySelector(".text-module-begin a") ?? el.querySelector("h2");
-  const title = text(titleEl);
+  const titleEl = el.querySelector("h3 a") ?? el.querySelector("h2 a") ?? el.querySelector("a.ellipsis") ?? el.querySelector("h3") ?? el.querySelector("h2");
+  const title = text(titleEl) || (ld.title ?? "").trim();
   if (!title) return null;
 
-  const priceText = text(el.querySelector('[class*="price-shipping--price"]') ?? el.querySelector('[class*="--price"]'));
+  // the current price is the first price-looking <p> that is not struck through
+  const priceEl =
+    el.querySelector('[class*="price-shipping--price"]') ??
+    el.querySelectorAll("p").find((p) => !/line-through/.test(p.getAttribute("class") ?? "") && /€|\bVB\b|verschenken/i.test(text(p)));
+  const placeEl =
+    el.querySelector('[class*="aditem-main--top--left"]') ?? el.querySelector('svg[data-title="locationOutline"]')?.parentNode?.querySelector("span");
+  const bodyEl = el.querySelector('[class*="aditem-main--middle--description"]') ?? el.querySelector("h3")?.nextElementSibling;
+
   const img = el.querySelector("img");
-  const image = img?.getAttribute("src") ?? img?.getAttribute("data-imgsrc") ?? img?.getAttribute("srcset")?.split(/\s/)[0] ?? null;
+  const image = img?.getAttribute("src") ?? img?.getAttribute("data-imgsrc") ?? ld.contentUrl ?? null;
 
   return {
     id,
     title,
-    price: parseKaPrice(priceText),
+    price: parseKaPrice(text(priceEl)),
     url: href.startsWith("http") ? href : BASE + href,
-    location: text(el.querySelector('[class*="aditem-main--top--left"]')),
-    body: text(el.querySelector('[class*="aditem-main--middle--description"]')),
+    location: text(placeEl),
+    body: (ld.description ?? text(bodyEl)).replace(/\s+/g, " ").trim(),
     image: image && /^https?:\/\//.test(image) ? image : null,
     publishedAt: null,
   };
@@ -150,13 +177,21 @@ export const kleinanzeigen: SiteAdapter = {
 
     const seen = new Set<string>();
     const out: Listing[] = [];
+    let wanted = 0;
     for (const el of items) {
+      if (isWanted(el)) {
+        wanted++;
+        continue;
+      }
       const l = listingFrom(el);
       if (l && !seen.has(l.id)) {
         seen.add(l.id);
         out.push(l);
       }
     }
+    // cards found but none readable: the markup changed. Fail loudly so the health alert fires,
+    // instead of reporting "0 new listings" forever (what the first live probe did).
+    if (!out.length && wanted < items.length) throw new Error(`found ${items.length} ad cards but could not read any (layout changed)`);
     return out;
   },
 };

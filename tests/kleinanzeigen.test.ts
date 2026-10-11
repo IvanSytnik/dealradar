@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { kleinanzeigen as ka, parseKaPrice } from "../src/sites/kleinanzeigen.js";
 import { adapterForUrl } from "../src/sites/index.js";
@@ -80,5 +83,34 @@ describe("Kleinanzeigen listings", () => {
     expect(parseKaPrice("1.200 € VB")).toBe(1200);
     expect(parseKaPrice("Zu verschenken")).toBe(0);
     expect(parseKaPrice("VB")).toBeNull();
+  });
+});
+
+describe("Kleinanzeigen live markup (real page, 2026-10-11)", () => {
+  const html = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "fixtures/kleinanzeigen-ps5.html"), "utf8");
+  const list = ka.parseListings(html);
+
+  it("reads every offer on the page, wanted ads excluded", () => {
+    expect(list).toHaveLength(26); // 27 cards, one is a "Gesuch"
+    expect(list.some((l) => /suche Ps5/i.test(l.title))).toBe(false);
+  });
+
+  it("gets title, current price (not the struck-through one), place, text and photo", () => {
+    expect(list[0]).toMatchObject({
+      id: "3535789602",
+      title: "Sony PlayStation 5 Pro - Neu & OVP",
+      price: 1299, // "1.299 € VB", old price 1.399 € struck through
+      location: "74821 Mosbach",
+      url: "https://www.kleinanzeigen.de/s-anzeige/sony-playstation-5-pro-neu-ovp/3535789602-279-8021",
+    });
+    expect(list[0]!.body).toMatch(/^Ich verkaufe hier meine neue/);
+    expect(list[0]!.image).toMatch(/^https:\/\/img\.kleinanzeigen\.de\//);
+    expect(list.filter((l) => l.location).length).toBe(list.length);
+    expect(list.filter((l) => l.price !== null).length).toBeGreaterThanOrEqual(24); // "VB" alone has no number
+  });
+
+  it("cards that cannot be read fail loudly instead of returning nothing", () => {
+    const broken = html.replace(/<h3[\s\S]*?<\/h3>/g, "").replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g, "");
+    expect(() => ka.parseListings(broken)).toThrow(/could not read any/);
   });
 });
