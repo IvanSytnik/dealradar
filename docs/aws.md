@@ -5,7 +5,7 @@ Infrastructure as code in [`infra/terraform`](../infra/terraform), continuous de
 
 ```mermaid
 flowchart LR
-  dev[git push main] --> ci[GitHub Actions: CI<br/>typecheck, 206 tests,<br/>terraform validate]
+  dev[git push main] --> ci[GitHub Actions: CI<br/>typecheck, 214 tests,<br/>terraform validate]
   ci -->|green| cd[Deploy workflow]
   cd -->|OIDC role or scoped IAM user| sts[(AWS STS)]
   cd -->|docker buildx arm64| ecr[(ECR)]
@@ -13,6 +13,8 @@ flowchart LR
   ecr --> ec2
   ssm[(SSM Parameter Store<br/>SecureString secrets)] --> ec2
   ec2 -->|awslogs driver| cw[(CloudWatch Logs)]
+  ec2 -->|PutObject reports/*| s3[(S3 reports<br/>private, 30-day lifecycle)]
+  s3 -->|OAC| cf[CloudFront] -->|link in Telegram| user[Phone browser]
   ec2 -->|long polling| tg[Telegram API]
   ec2 --> wh[Willhaben]
   ec2 --> ai[Anthropic API]
@@ -28,7 +30,8 @@ flowchart LR
 | GitHub OIDC role, IAM user fallback | Preferred: short-lived credentials scoped to `repo:IvanSytnik/dealradar:ref:refs/heads/main`, no AWS keys in GitHub. AWS Free plan (new experience) accounts sit in an AWS-managed organization whose SCP denies `iam:*Provider*`, so `github_deploy_auth = "iam_user"` switches to a dedicated user with the same least-privilege policy; its key goes straight from the CLI into GitHub secrets, never into Terraform state. |
 | Region `eu-north-1` | The same SCP allows only the account's home region plus `us-east-1`/`us-west-2`. Stockholm has Graviton and is ~25 ms from Austria. |
 | Secrets in SSM Parameter Store | `SecureString`, read at container start into a root-only env file. Not in the image, not in git, not in Terraform state. |
-| IMDSv2 only, encrypted EBS | Defaults that should not be optional. |
+| IMDSv2 only, encrypted EBS | Defaults that should not be optional. Hop limit 2 so the container can use the instance role. |
+| Reports on S3 + CloudFront | Telegram's iOS document preview runs no JavaScript, so a report sent as a file loses sorting and filters on a phone. Reports go to a private bucket under a random 128-bit key and open through CloudFront (origin access control, no public bucket, `no-referrer`, `noindex`). A lifecycle rule deletes them after 30 days. The file is still sent as a copy. |
 | Root volume survives instance replacement | `delete_on_termination = false`: the SQLite database is not lost if Terraform replaces the instance. |
 | Budget with e-mail alerts | Credits run out quietly otherwise. |
 
@@ -39,7 +42,7 @@ flowchart LR
 | EC2 t4g.micro (~$0.009/h) | ~6.5 |
 | Public IPv4 ($0.005/h) | 3.65 |
 | EBS gp3 10 GB | ~1 |
-| ECR, CloudWatch Logs, SSM | < 0.5 |
+| ECR, CloudWatch Logs, SSM, S3 + CloudFront reports | < 0.5 |
 | **Total** | **≈ 12** |
 
 A NAT gateway would avoid the public IP but costs ~$35/month, so the instance gets a public IPv4 with no inbound rules.
