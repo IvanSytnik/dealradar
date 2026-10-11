@@ -14,6 +14,8 @@ export interface ScoredItem {
   deal: DealScore;
   /** The variant whose median scored this listing; null: scored against the overall median */
   variant: string | null;
+  /** the listing did not name its model: compared with the cheapest one */
+  guessed: boolean;
 }
 
 export interface ScanReport {
@@ -150,6 +152,7 @@ export class ScanService {
         listing: k.listing,
         verdict: k.verdict,
         variant: ref.variant,
+        guessed: ref.guessed,
         deal: scoreDeal(
           { price: k.listing.price, bundleItems: k.verdict?.bundle.length ?? 0, defect: isDefect(k), suspicious: !!k.verdict?.suspicious },
           ref.stats,

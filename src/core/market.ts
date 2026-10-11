@@ -16,10 +16,31 @@ export interface MarketData extends MarketStats {
   variants?: Record<string, MarketStats>;
 }
 
-/** The numbers a listing of this variant is compared with: its own variant when known, else the overall ones. */
-export function statsFor(m: MarketData | null, variant: string | null | undefined): { stats: MarketStats | null; variant: string | null } {
-  const v = variant ? m?.variants?.[variant] : undefined;
-  return v ? { stats: v, variant: variant! } : { stats: m, variant: null };
+export interface MarketRef {
+  stats: MarketStats | null;
+  /** the variant whose numbers are used; null: the overall ones */
+  variant: string | null;
+  /** the listing does not say which model it is, so it is compared with the cheapest one */
+  guessed: boolean;
+}
+
+/**
+ * The numbers a listing is compared with:
+ * - its own variant, when known and it has enough listings;
+ * - the cheapest variant, when the listing does not name one. Sellers name the expensive models ("Pro"),
+ *   so an unnamed "PS5 Konsole" is a base model; the overall median (pulled up by Pros) made a 360 €
+ *   one look 40 % cheap and put it at the top of the live Stuttgart scan (2026-10-11). Cheapest is the
+ *   conservative choice: a missed deal is better than a false one;
+ * - the overall numbers otherwise (a named variant with too few listings, or no variants at all).
+ */
+export function statsFor(m: MarketData | null, variant: string | null | undefined): MarketRef {
+  const own = variant ? m?.variants?.[variant] : undefined;
+  if (own) return { stats: own, variant: variant!, guessed: false };
+  if (!variant && m?.variants) {
+    const cheapest = Object.entries(m.variants).sort((a, b) => a[1].median - b[1].median)[0];
+    if (cheapest) return { stats: cheapest[1], variant: cheapest[0], guessed: true };
+  }
+  return { stats: m, variant: null, guessed: false };
 }
 
 /** Linear-interpolated quantile of a sorted array. */

@@ -1,5 +1,5 @@
 import { pct, RELIABLE_N } from "../core/market.js";
-import { variantLabel } from "../core/variants.js";
+import { refLabel, variantLabel } from "../core/variants.js";
 import { t as dict, type Dict, type Lang } from "../i18n/index.js";
 import type { ScanReport, ScoredItem } from "../services/scan.js";
 
@@ -18,8 +18,13 @@ function row(t: Dict, i: ScoredItem, rank: number): string {
   const note = i.verdict?.note ? `<div class="sub">${esc(i.verdict.note)}</div>` : i.verdict ? "" : `<div class="sub muted">${esc(t.report.notChecked)}</div>`;
   const img = safeUrl(l.image);
   // the AI's model guess, even when it had too few listings for its own median (then the delta is vs. all models)
-  const model = i.verdict?.variant ?? "";
-  const modelTag = model ? `<span class="tag t-model">${esc(variantLabel(model))}</span>` : "";
+  // "?" = the listing did not name its model (filterable as its own chip)
+  const model = i.verdict?.variant ?? (i.guessed ? "?" : "");
+  const modelTag = i.verdict?.variant
+    ? `<span class="tag t-model">${esc(variantLabel(i.verdict.variant))}</span>`
+    : i.guessed && i.variant
+      ? `<span class="tag t-guess" title="${esc(t.report.guessHint)}">${esc(refLabel(i.variant, true))}</span>`
+      : "";
   return `<tr data-score="${i.deal.score ?? -1}" data-price="${l.price ?? ""}" data-delta="${i.deal.delta ?? ""}" data-tags="${i.deal.tags.join(" ")}" data-variant="${esc(model)}">
   <td class="num">${rank}</td>
   <td class="pic">${img ? `<img loading="lazy" src="${img}" alt="">` : ""}</td>
@@ -49,7 +54,7 @@ export function renderReport(r: ScanReport, lang: Lang): string {
     ? r.highlights
         .map(
           (h) => `<li><a href="${safeUrl(h.listing.url)}" target="_blank" rel="noopener noreferrer">${esc(h.listing.title)}</a>
-          <b>${eur(h.listing.price)}</b> · ${h.variant ? `${esc(variantLabel(h.variant))}: ` : ""}${h.deal.delta !== null ? esc(pct(h.deal.delta, t)) : ""} · ${esc(R.score(h.deal.score ?? 0))}</li>`,
+          <b>${eur(h.listing.price)}</b> · ${h.variant ? `${esc(refLabel(h.variant, h.guessed))}: ` : ""}${h.deal.delta !== null ? esc(pct(h.deal.delta, t)) : ""} · ${esc(R.score(h.deal.score ?? 0))}</li>`,
         )
         .join("")
     : `<li class="muted">${esc(R.noHighlights)}</li>`;
@@ -77,12 +82,16 @@ ${variantRow(R.allModels, s, "all")}
       : "";
   // chips for every model the AI named in this report, most common first
   const modelCounts = new Map<string, number>();
-  for (const i of r.items) if (i.verdict?.variant) modelCounts.set(i.verdict.variant, (modelCounts.get(i.verdict.variant) ?? 0) + 1);
-  const models = [...modelCounts.entries()].sort((a, b) => b[1] - a[1]).map(([m]) => m);
+  for (const i of r.items) {
+    const m = i.verdict?.variant ?? (i.guessed ? "?" : null);
+    if (m) modelCounts.set(m, (modelCounts.get(m) ?? 0) + 1);
+  }
+  const models = [...modelCounts.entries()].sort((a, b) => (a[0] === "?" ? 1 : b[0] === "?" ? -1 : b[1] - a[1])).map(([m]) => m);
+  const chipName = (m: string) => (m === "?" ? R.unknownModel : variantLabel(m));
   const modelChips =
     models.length >= 2
       ? `<div class="chips" id="models"><button class="chip" aria-pressed="true" data-variant="">${esc(R.allModels)}</button>${models
-          .map((m) => `<button class="chip" aria-pressed="false" data-variant="${esc(m)}">${esc(variantLabel(m))} (${modelCounts.get(m)})</button>`)
+          .map((m) => `<button class="chip" aria-pressed="false" data-variant="${esc(m)}">${esc(chipName(m))} (${modelCounts.get(m)})</button>`)
           .join("")}</div>`
       : "";
 
@@ -107,7 +116,7 @@ table{border-collapse:collapse;width:100%;min-width:720px}th,td{padding:8px 10px
 th{font-size:13px;color:var(--muted);user-select:none;white-space:nowrap;position:sticky;top:0;background:var(--card)}
 td.num{text-align:right;white-space:nowrap}td.loc{font-size:13px;color:var(--muted)}td.pic img{width:64px;height:48px;object-fit:cover;border-radius:6px}
 .sub{font-size:13px;color:var(--muted);margin-top:2px}.tags{margin-top:4px}.tag{display:inline-block;font-size:12px;border-radius:6px;padding:1px 6px;margin:2px 4px 0 0;background:var(--bg);border:1px solid var(--line)}
-.t-very_cheap,.t-cheap{color:var(--acc)}.t-model{font-weight:600}
+.t-very_cheap,.t-cheap{color:var(--acc)}.t-model{font-weight:600}.t-guess{color:var(--muted);border-style:dashed}
 table.vt{min-width:0}table.vt tr.all td{color:var(--muted)}.t-suspicious{color:var(--hot)}
 footer{margin-top:24px;font-size:13px;color:var(--muted)}
 .m-price{display:none}

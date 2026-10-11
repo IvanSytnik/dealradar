@@ -40,3 +40,6 @@ export function matchVariant(raw: unknown, variants: string[] | undefined): stri
 
 /** "slim digital" -> "Slim Digital" */
 export const variantLabel = (v: string) => v.replace(/(^|\s)(\p{L})/gu, (_, s: string, c: string) => s + c.toUpperCase());
+
+/** "Pro", or "Digital?" when the listing did not name its model and was compared with the cheapest one */
+export const refLabel = (variant: string, guessed: boolean) => variantLabel(variant) + (guessed ? "?" : "");

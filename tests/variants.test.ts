@@ -63,6 +63,7 @@ function ads(): FakeAd[] {
   [1150, 1200, 1250, 1250, 1300, 1350].forEach((p, i) => out.push({ id: 200 + i, title: `PS5 Pro #${i}`, price: p }));
   out.push({ id: 300, title: "PS5 Pro Neu", price: 950 }); // cheap for a Pro, expensive for a PS5
   [450, 480].forEach((p, i) => out.push({ id: 400 + i, title: `PS5 Digital #${i}`, price: p })); // too few for their own median
+  out.push({ id: 500, title: "Sony PS5 Konsole", price: 420 }); // model not stated
   return out;
 }
 
@@ -98,6 +99,13 @@ describe("scan by variant", () => {
     expect(digital.variant).toBeNull();
     expect(digital.verdict?.variant).toBe("digital");
 
+    // no model in the listing: compared with the cheapest model, not the Pro-inflated overall median
+    const unnamed = rep.items.find((i) => i.listing.id === "500")!;
+    expect(unnamed.verdict?.variant).toBeNull();
+    expect(unnamed).toMatchObject({ variant: "standard", guessed: true });
+    expect(unnamed.deal.delta).toBeCloseTo(420 / 550 - 1, 3);
+    expect(rep.stats!.median).toBeGreaterThan(550);
+
     const stored = s.repo.getWatch(s.watch.id)!.market!;
     expect(stored.variants?.pro?.median).toBe(1250);
 
@@ -110,6 +118,9 @@ describe("scan by variant", () => {
     expect(html).toContain('data-variant="pro"');
     expect(html).toContain('id="models"');
     expect(html).toContain("Digital (2)");
+    expect(html).toContain('data-variant="?"');
+    expect(html).toContain("Model not stated (1)");
+    expect(html).toContain("Standard?");
   });
 
   it("asks once for the variants of an older watch and keeps them", async () => {
@@ -142,6 +153,7 @@ describe("scan by variant", () => {
     expect(text).toContain("на 20% дешевле медианы (медиана Pro: 1250 €)");
     const plain = listingText(RU, w, listing({ id: "9", title: "PS5", price: 1000 }), { defect: false, verdict: { ...verdict, variant: null }, oldPrice: null });
     expect(plain).not.toContain("Pro:");
+    expect(plain).toContain("(медиана Standard?: 550 €)");
     expect(profileSummary(RU, w)).toContain("🧩 По моделям: Standard 550 € · Pro 1250 €");
   });
 });

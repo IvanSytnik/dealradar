@@ -2,7 +2,7 @@ import { PLANS } from "../core/plans.js";
 import type { Preview } from "../services/watches.js";
 import type { ScanReport } from "../services/scan.js";
 import { pct, RELIABLE_N, statsFor, vsMedian, type MarketStats } from "../core/market.js";
-import { variantLabel } from "../core/variants.js";
+import { refLabel, variantLabel } from "../core/variants.js";
 import type { Dict } from "../i18n/index.js";
 import type { ListingInfo } from "../services/notifier.js";
 import type { Listing, User, Watch } from "../types.js";
@@ -28,7 +28,7 @@ export function listingText(t: Dict, watch: Watch, l: Listing, info: ListingInfo
   const ref = statsFor(watch.market, info.verdict?.variant);
   if (ref.stats && l.price !== null) {
     const delta = pct(vsMedian(l.price, ref.stats), t);
-    lines.push(ref.variant ? t.vsMedianVariant(delta, esc(variantLabel(ref.variant)), eur(ref.stats.median)) : t.vsMedian(delta, eur(ref.stats.median)));
+    lines.push(ref.variant ? t.vsMedianVariant(delta, esc(refLabel(ref.variant, ref.guessed)), eur(ref.stats.median)) : t.vsMedian(delta, eur(ref.stats.median)));
   }
   const v = info.verdict;
   if (v) {
@@ -168,7 +168,7 @@ export function scanSummaryText(t: Dict, r: ScanReport, opts: { link?: boolean }
     const tags = h.deal.tags.filter((x) => x !== "cheap" && x !== "very_cheap").map((x) => t.tag[x]);
     lines.push(
       `${i + 1}. <a href="${esc(h.listing.url)}">${esc(h.listing.title.slice(0, 60))}</a> · <b>${eur(h.listing.price)}</b> · ${
-        h.variant ? `${esc(variantLabel(h.variant))}: ` : ""
+        h.variant ? `${esc(refLabel(h.variant, h.guessed))}: ` : ""
       }${h.deal.delta !== null ? pct(h.deal.delta, t) : ""}${tags.length ? ` · ${tags.join(", ")}` : ""}`,
     );
   });
