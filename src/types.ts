@@ -62,6 +62,8 @@ export interface User {
   plan: Plan;
   /** Interface and AI-text language */
   lang: Lang;
+  /** Time-limited Pro from invites; `plan` already reflects it while it lasts */
+  proUntil: number | null;
   createdAt: number;
   blocked: boolean;
 }

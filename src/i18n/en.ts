@@ -239,6 +239,33 @@ Your plan and usage: /plan`,
   cmdLang: "Language",
   cmdHelp: "Help",
 
+  privacy: (contact) => `🔒 <b>Data and privacy</b>
+
+<b>What I store</b>
+• your Telegram ID, username and language
+• your searches and filter settings
+• IDs and prices of listings already shown, so they aren't sent twice
+• your 👍/👎 taps and usage counters (AI checks, analyses)
+
+<b>Where</b>: an AWS server in Stockholm (EU). Market reports are kept for 30 days, server logs for 14 days.
+
+<b>Shared with</b>: listing texts and your search query go to Anthropic (Claude AI) for screening. Your Telegram data does not. Nothing is sold, there are no ads.
+
+<b>Delete everything</b>: /delete_me removes your account, watches and history right away.${contact ? `\n\nQuestions: ${contact}` : ""}`,
+  btnDeleteMe: "🗑 Delete my data",
+  deleteConfirm: "Delete all your data: watches, history and settings? This can't be undone.",
+  deleteDone: "Done, all your data is deleted. If you want to come back, just send /start.",
+  inviteText: (link, days, count) =>
+    `🎁 <b>Invite a friend</b>\n\nWhen a friend starts the bot through your link, you both get <b>${days} days of Pro</b>.\n\n${link}${count ? `\n\nJoined through your link so far: ${count}` : ""}`,
+  btnShare: "📤 Share",
+  shareText: "This bot sends only the Willhaben listings you want and tells you if they're below market price",
+  refWelcome: (days) => `🎁 A friend invited you: you get ${days} days of Pro as a gift.`,
+  refRewarded: (days) => `🎉 A friend joined through your link: +${days} days of Pro.`,
+  planProUntil: (date) => `Pro until ${date}`,
+  planInviteHint: "🎁 Invite a friend and you both get a week of Pro: /invite",
+  cmdInvite: "Invite a friend (+7 days Pro)",
+  cmdPrivacy: "Data and privacy",
+
   report: {
     title: (name) => `Market analysis: ${name}`,
     meta: (pages, total, n, limitHit) => `${pages} pages · ${total} listings · ${n} match${limitHit ? " · page limit reached" : ""}`,

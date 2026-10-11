@@ -88,4 +88,9 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE users ADD COLUMN lang TEXT NOT NULL DEFAULT 'en';
   ALTER TABLE users ADD COLUMN lang_set INTEGER NOT NULL DEFAULT 0;
   `,
+  // v4: referrals. pro_until = time-limited Pro (invite bonus); referred_by = who invited this user
+  `
+  ALTER TABLE users ADD COLUMN pro_until INTEGER;
+  ALTER TABLE users ADD COLUMN referred_by INTEGER;
+  `,
 ];

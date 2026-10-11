@@ -21,6 +21,8 @@ const schema = z.object({
   TICK_SECONDS: z.coerce.number().default(15),
   // When true every new user starts on "pro" (handy for a private deployment)
   EVERYONE_PRO: bool,
+  // Shown in /privacy as the contact for data questions (e-mail or @username). Optional.
+  CONTACT: z.string().optional().default(""),
   // Optional: publish /scan reports to S3 + CloudFront so they open in a real browser (see infra/terraform)
   REPORTS_BUCKET: z.string().optional().default(""),
   REPORTS_BASE_URL: z.string().optional().default(""),

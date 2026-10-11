@@ -1,6 +1,6 @@
 import { Bot, GrammyError, InlineKeyboard, InputFile, type Context } from "grammy";
 import type { AppConfig } from "../config.js";
-import { INTERVAL_CHOICES, PLANS } from "../core/plans.js";
+import { INTERVAL_CHOICES, PLANS, REFERRAL_DAYS } from "../core/plans.js";
 import type { Repo } from "../db/repo.js";
 import { detectLang, isLang, LANG_LABELS, LANGS, t, type Dict, type Lang } from "../i18n/index.js";
 import { logger } from "../logger.js";
@@ -282,6 +282,23 @@ export function createBot(deps: {
     const isNew = !repo.getUser(ctx.from!.id);
     const { user, T } = who(ctx);
     if (isNew) repo.track(user.id, "signup", { ref: ctx.match || null, lang: user.lang });
+
+    // Invite link: t.me/bot?start=ref_<inviter id>. Only a brand-new user counts, and not yourself.
+    const ref = /^ref_(\d+)$/.exec(ctx.match ?? "");
+    if (ref) {
+      const inviter = repo.getUser(Number(ref[1]));
+      if (isNew && inviter && inviter.id !== user.id && repo.setReferrer(user.id, inviter.id)) {
+        repo.grantProDays(user.id, REFERRAL_DAYS);
+        repo.grantProDays(inviter.id, REFERRAL_DAYS);
+        repo.track(inviter.id, "referral", { invited: user.id });
+        await ctx.api
+          .sendMessage(inviter.chatId, t(inviter.lang).refRewarded(REFERRAL_DAYS), HTML)
+          .catch(() => undefined);
+        await reply(ctx, T.refWelcome(REFERRAL_DAYS));
+      }
+      return reply(ctx, T.welcome, welcomeKeyboard(T, user.lang));
+    }
+
     // Deep link: t.me/bot?start=<base64url keyword> lets a landing page pre-fill a search
     if (ctx.match) {
       try {
@@ -293,6 +310,25 @@ export function createBot(deps: {
     }
     await reply(ctx, T.welcome, welcomeKeyboard(T, user.lang));
   });
+
+  bot.command("invite", async (ctx) => {
+    const { user, T } = who(ctx);
+    const link = `https://t.me/${ctx.me.username}?start=ref_${user.id}`;
+    const share = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(T.shareText)}`;
+    repo.track(user.id, "invite_opened");
+    return reply(ctx, T.inviteText(link, REFERRAL_DAYS, repo.countReferrals(user.id)), new InlineKeyboard().url(T.btnShare, share));
+  });
+
+  bot.command("privacy", (ctx) => {
+    const { T } = who(ctx);
+    return reply(ctx, T.privacy(esc(config.CONTACT)), new InlineKeyboard().text(T.btnDeleteMe, cb("delme")));
+  });
+
+  const askDelete = (ctx: Context) => {
+    const { T } = who(ctx);
+    return reply(ctx, T.deleteConfirm, new InlineKeyboard().text(T.btnConfirmDelete, cb("delmeok")).text(T.btnCancel, cb("kwx")));
+  };
+  bot.command("delete_me", askDelete);
 
   bot.command("help", (ctx) => {
     const { T } = who(ctx);
@@ -322,8 +358,14 @@ export function createBot(deps: {
 
   bot.command("plan", (ctx) => {
     const { user, T } = who(ctx);
-    const extra = user.plan === "free" ? `\n\n${planPitch(T)}` : "";
-    return reply(ctx, planText(T, user, repo.countWatches(user.id), repo.aiCallsToday(user.id)) + extra);
+    const lines = [planText(T, user, repo.countWatches(user.id), repo.aiCallsToday(user.id))];
+    // a running invite bonus (not a permanent Pro) shows its end date
+    if (user.proUntil && user.proUntil > Date.now() && !isAdmin(user.id)) {
+      lines.push(T.planProUntil(new Date(user.proUntil).toLocaleDateString("de-AT", { timeZone: "Europe/Vienna" })));
+    }
+    if (user.plan === "free") lines.push("", planPitch(T));
+    lines.push("", T.planInviteHint);
+    return reply(ctx, lines.join("\n"));
   });
 
   const editCmd = (name: string, run: (user: User, args: string) => Watch | null, usage: string) =>
@@ -400,6 +442,7 @@ export function createBot(deps: {
         `🔔 Уведомления: ${day.notifications} за 24ч / ${week.notifications} за 7д`,
         `🤖 ИИ-вызовы: ${day.aiCalls} за 24ч`,
         `👎 «Не то»: ${day.negativeFeedback} за 24ч`,
+        `🎁 По приглашениям: ${day.referrals} за 24ч / ${week.referrals} за 7д`,
       ].join("\n"),
     );
   });
@@ -464,6 +507,21 @@ export function createBot(deps: {
     const opts = { ...HTML, reply_markup: helpKeyboard(T, topic) };
     if (ctx.match[2]) await ctx.reply(helpText(T, topic), opts);
     else await ctx.editMessageText(helpText(T, topic), opts).catch(() => undefined);
+  });
+
+  bot.callbackQuery("delme", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await askDelete(ctx);
+  });
+
+  bot.callbackQuery("delmeok", async (ctx) => {
+    const T = t(repo.getUser(ctx.from.id)?.lang ?? detectLang(ctx.from.language_code));
+    // no userOf() here: it would re-create the user we are deleting
+    pendingText.delete(ctx.from.id);
+    repo.deleteUser(ctx.from.id);
+    logger.info("user deleted their data", { user: ctx.from.id });
+    await ctx.answerCallbackQuery(T.deleted);
+    await ctx.editMessageText(T.deleteDone, HTML).catch(() => reply(ctx, T.deleteDone));
   });
 
   bot.callbackQuery("lngm", async (ctx) => {
@@ -617,7 +675,9 @@ export async function registerCommands(bot: Bot) {
       { command: "list", description: T.cmdList },
       { command: "scan", description: T.cmdScan },
       { command: "plan", description: T.cmdPlan },
+      { command: "invite", description: T.cmdInvite },
       { command: "lang", description: T.cmdLang },
+      { command: "privacy", description: T.cmdPrivacy },
       { command: "help", description: T.cmdHelp },
     ];
     await bot.api.setMyCommands(commands, { language_code: lang });

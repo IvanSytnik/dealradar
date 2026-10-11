@@ -43,12 +43,15 @@ function rowToWatch(r: any): Watch {
   };
 }
 
-function rowToUser(r: any): User {
+/** `plan` is the effective plan: a stored "pro", or a Pro bonus that has not expired yet. */
+function rowToUser(r: any, now: number): User {
+  const proUntil: number | null = r.pro_until ?? null;
   return {
     id: r.id,
     chatId: r.chat_id,
     username: r.username,
-    plan: r.plan as Plan,
+    plan: r.plan === "pro" || (proUntil !== null && proUntil > now) ? "pro" : (r.plan as Plan),
+    proUntil,
     lang: isLang(r.lang) ? r.lang : "en",
     blocked: !!r.blocked,
     createdAt: r.created_at,
@@ -77,6 +80,37 @@ export class Repo {
     return this.getUser(id)!;
   }
 
+  /** Adds Pro days on top of whatever bonus is still running. */
+  grantProDays(id: number, days: number) {
+    const r = this.db.prepare("SELECT pro_until FROM users WHERE id = ?").get(id) as { pro_until: number | null } | undefined;
+    if (!r) return false;
+    const from = Math.max(r.pro_until ?? 0, this.now());
+    this.db.prepare("UPDATE users SET pro_until = ? WHERE id = ?").run(from + days * 86_400_000, id);
+    return true;
+  }
+
+  /** First referrer wins; returns false if the user already had one. */
+  setReferrer(id: number, referrerId: number) {
+    return this.db.prepare("UPDATE users SET referred_by = ? WHERE id = ? AND referred_by IS NULL").run(referrerId, id).changes > 0;
+  }
+
+  countReferrals(id: number): number {
+    return (this.db.prepare("SELECT COUNT(*) c FROM users WHERE referred_by = ?").get(id) as { c: number }).c;
+  }
+
+  /**
+   * GDPR erasure: the user row and everything keyed by the user. Watches cascade to seen and feedback.
+   * Verdict cache rows are keyed by a hash of the listing and carry no user id.
+   */
+  deleteUser(id: number) {
+    const run = this.db.transaction(() => {
+      for (const table of ["events", "ai_usage", "scan_usage"]) this.db.prepare(`DELETE FROM ${table} WHERE user_id = ?`).run(id);
+      this.db.prepare("UPDATE users SET referred_by = NULL WHERE referred_by = ?").run(id);
+      return this.db.prepare("DELETE FROM users WHERE id = ?").run(id).changes > 0;
+    });
+    return run();
+  }
+
   /** Explicit choice from /lang: sticks even if the Telegram locale differs. */
   setLang(id: number, lang: Lang) {
     return this.db.prepare("UPDATE users SET lang = ?, lang_set = 1 WHERE id = ?").run(lang, id).changes > 0;
@@ -84,7 +118,7 @@ export class Repo {
 
   getUser(id: number): User | null {
     const r = this.db.prepare("SELECT * FROM users WHERE id = ?").get(id);
-    return r ? rowToUser(r) : null;
+    return r ? rowToUser(r, this.now()) : null;
   }
 
   setPlan(id: number, plan: Plan) {
@@ -296,7 +330,8 @@ export class Repo {
     return {
       users: one("SELECT COUNT(*) c FROM users"),
       activeUsers: one("SELECT COUNT(DISTINCT user_id) c FROM watches WHERE active = 1"),
-      proUsers: one("SELECT COUNT(*) c FROM users WHERE plan = 'pro'"),
+      proUsers: one("SELECT COUNT(*) c FROM users WHERE plan = 'pro' OR pro_until > ?", this.now()),
+      referrals: one("SELECT COUNT(*) c FROM users WHERE referred_by IS NOT NULL AND created_at >= ?", sinceMs),
       watches: one("SELECT COUNT(*) c FROM watches"),
       activeWatches: one("SELECT COUNT(*) c FROM watches WHERE active = 1"),
       notifications: one("SELECT COUNT(*) c FROM events WHERE type = 'notify' AND created_at >= ?", sinceMs),

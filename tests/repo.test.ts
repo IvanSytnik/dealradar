@@ -123,4 +123,52 @@ describe("Repo", () => {
     repo.track(1, "notify");
     expect(repo.stats(0)).toMatchObject({ users: 2, proUsers: 1, watches: 1, activeWatches: 1, notifications: 1 });
   });
+
+  it("invite bonus: Pro until it expires, stacking on a running bonus", () => {
+    const c = clock();
+    const repo = memRepo(c.now);
+    repo.upsertUser(1, 1, "a");
+    expect(repo.getUser(1)!.plan).toBe("free");
+    repo.grantProDays(1, 7);
+    repo.grantProDays(1, 7); // second invite extends, does not reset
+    expect(repo.getUser(1)!.plan).toBe("pro");
+    c.advance(13 * 86_400_000);
+    expect(repo.getUser(1)!.plan).toBe("pro");
+    c.advance(2 * 86_400_000);
+    expect(repo.getUser(1)!.plan).toBe("free");
+  });
+
+  it("a user can be referred only once", () => {
+    const repo = memRepo();
+    for (const id of [1, 2, 3]) repo.upsertUser(id, id, null);
+    expect(repo.setReferrer(3, 1)).toBe(true);
+    expect(repo.setReferrer(3, 2)).toBe(false);
+    expect(repo.countReferrals(1)).toBe(1);
+  });
+
+  it("deleteUser erases the user and everything keyed by them", () => {
+    const repo = memRepo();
+    seedUser(repo, 1);
+    seedUser(repo, 2);
+    const w = seedWatch(repo, 1);
+    repo.checkSeen(w.id, "x", 100, "Xbox");
+    repo.addFeedback(w.id, "x", "Xbox", 100, false);
+    repo.track(1, "signup");
+    repo.takeAiCall(1, 10);
+    repo.takeScan(1, 10);
+    repo.setReferrer(2, 1);
+
+    expect(repo.deleteUser(1)).toBe(true);
+    const left = (table: string, where = "user_id = 1") =>
+      (repo.db.prepare(`SELECT COUNT(*) c FROM ${table} WHERE ${where}`).get() as { c: number }).c;
+    expect(repo.getUser(1)).toBeNull();
+    expect(left("watches")).toBe(0);
+    expect(left("seen", `watch_id = ${w.id}`)).toBe(0);
+    expect(left("feedback", `watch_id = ${w.id}`)).toBe(0);
+    expect(left("events")).toBe(0);
+    expect(left("ai_usage")).toBe(0);
+    expect(left("scan_usage")).toBe(0);
+    expect(left("users", "referred_by = 1")).toBe(0); // no dangling reference to the erased id
+    expect(repo.getUser(2)).not.toBeNull();
+  });
 });

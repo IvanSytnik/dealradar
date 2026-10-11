@@ -18,3 +18,6 @@ export const INTERVAL_CHOICES = [60, 120, 300, 600, 1800];
 export function clampInterval(plan: Plan, sec: number): number {
   return Math.max(PLANS[plan].minIntervalSec, Math.min(3600, Math.round(sec)));
 }
+
+/** Pro days the inviter and the invited friend each get. */
+export const REFERRAL_DAYS = 7;

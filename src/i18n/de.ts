@@ -240,6 +240,33 @@ Dein Tarif und Verbrauch: /plan`,
   cmdLang: "Sprache",
   cmdHelp: "Hilfe",
 
+  privacy: (contact) => `🔒 <b>Daten und Datenschutz</b>
+
+<b>Was ich speichere</b>
+• deine Telegram-ID, deinen Benutzernamen und deine Sprache
+• deine Suchen und Filtereinstellungen
+• IDs und Preise bereits gezeigter Anzeigen, damit sie nicht doppelt kommen
+• deine 👍/👎 und Nutzungszähler (KI-Prüfungen, Analysen)
+
+<b>Wo</b>: auf einem AWS-Server in Stockholm (EU). Marktberichte werden 30 Tage aufbewahrt, Server-Logs 14 Tage.
+
+<b>Weitergabe</b>: Anzeigentexte und dein Suchbegriff gehen zur Prüfung an Anthropic (Claude-KI). Deine Telegram-Daten nicht. Nichts wird verkauft, es gibt keine Werbung.
+
+<b>Alles löschen</b>: /delete_me löscht dein Konto, deine Suchaufträge und den Verlauf sofort.${contact ? `\n\nFragen: ${contact}` : ""}`,
+  btnDeleteMe: "🗑 Meine Daten löschen",
+  deleteConfirm: "Alle deine Daten löschen: Suchaufträge, Verlauf und Einstellungen? Das lässt sich nicht rückgängig machen.",
+  deleteDone: "Erledigt, alle deine Daten sind gelöscht. Wenn du zurückkommen willst, schick einfach /start.",
+  inviteText: (link, days, count) =>
+    `🎁 <b>Freund einladen</b>\n\nWenn ein Freund den Bot über deinen Link startet, bekommt ihr beide <b>${days} Tage Pro</b>.\n\n${link}${count ? `\n\nBisher über deinen Link: ${count}` : ""}`,
+  btnShare: "📤 Teilen",
+  shareText: "Dieser Bot schickt nur die Willhaben-Anzeigen, die du suchst, und sagt dir, ob sie unter dem Marktpreis liegen",
+  refWelcome: (days) => `🎁 Ein Freund hat dich eingeladen: Du bekommst ${days} Tage Pro geschenkt.`,
+  refRewarded: (days) => `🎉 Über deinen Link ist ein Freund dazugekommen: +${days} Tage Pro.`,
+  planProUntil: (date) => `Pro bis ${date}`,
+  planInviteHint: "🎁 Lade einen Freund ein und ihr bekommt beide eine Woche Pro: /invite",
+  cmdInvite: "Freund einladen (+7 Tage Pro)",
+  cmdPrivacy: "Daten und Datenschutz",
+
   report: {
     title: (name) => `Marktanalyse: ${name}`,
     meta: (pages, total, n, limitHit) => `${pages} Seiten · ${total} Anzeigen · ${n} passen${limitHit ? " · Seitenlimit erreicht" : ""}`,

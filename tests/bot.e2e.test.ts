@@ -45,11 +45,11 @@ function setup(opts: { admin?: boolean; reports?: ReportPublisher; langCode?: st
   });
 
   let updateId = 0;
-  const text = (t: string) => {
+  const text = (t: string, as: typeof from = from) => {
     const entities = t.startsWith("/") ? [{ type: "bot_command" as const, offset: 0, length: t.split(" ")[0]!.length }] : undefined;
     return bot.handleUpdate({
       update_id: ++updateId,
-      message: { message_id: updateId, date: 0, chat: CHAT, from, text: t, entities },
+      message: { message_id: updateId, date: 0, chat: { ...CHAT, id: as.id }, from: as, text: t, entities },
     } as Update);
   };
   const press = (data: string) =>
@@ -234,6 +234,42 @@ describe("bot end-to-end", () => {
     await s.text(`/scan ${s.repo.listWatches(42)[0]!.id}`);
     await s.idle();
     expect(s.texts().join("\n")).toMatch(/в файле ниже/);
+  });
+
+  it("an invite gives both sides a week of Pro, once, and never for yourself", async () => {
+    const s = setup({ admin: false });
+    await s.text("/start");
+    await s.text("/invite");
+    expect(s.texts().at(-1)).toContain("https://t.me/dealradar_bot?start=ref_42");
+    expect(s.buttons()[0]!.url).toMatch(/^https:\/\/t\.me\/share\/url\?url=/);
+
+    const friend = { id: 77, is_bot: false, first_name: "Olya", username: "olya", language_code: "uk" };
+    await s.text("/start ref_42", friend);
+    expect(s.repo.getUser(77)!.plan).toBe("pro");
+    expect(s.repo.getUser(42)!.plan).toBe("pro");
+    expect(s.texts().some((x) => /\+7 дней Pro/.test(x))).toBe(true); // inviter is told, in their language
+    expect(s.texts().some((x) => /7 днів Pro в подарунок/.test(x))).toBe(true);
+
+    // the same friend again, and the inviter with their own link: nothing more
+    const before = s.repo.getUser(42)!.proUntil;
+    await s.text("/start ref_42", friend);
+    await s.text("/start ref_42");
+    expect(s.repo.getUser(42)!.proUntil).toBe(before);
+    expect(s.repo.countReferrals(42)).toBe(1);
+  });
+
+  it("/privacy explains the data, /delete_me erases it after confirmation", async () => {
+    const s = setup({ admin: false });
+    await s.text(LINK);
+    await s.text("/privacy");
+    expect(s.texts().at(-1)).toMatch(/Данные и приватность/);
+    expect(s.texts().at(-1)).toMatch(/Anthropic/);
+    await s.text("/delete_me");
+    expect(s.repo.getUser(42)).not.toBeNull(); // nothing happens before the confirmation
+    await s.press("delmeok");
+    expect(s.repo.getUser(42)).toBeNull();
+    expect(s.repo.listWatches(42)).toHaveLength(0);
+    expect(s.lastEdit()?.payload.text).toMatch(/данные удалены/);
   });
 
   it("the admin (owner) gets Pro limits automatically", async () => {
