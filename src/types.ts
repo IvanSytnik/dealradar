@@ -1,5 +1,5 @@
 import type { Lang } from "./i18n/index.js";
-import type { MarketStats } from "./core/market.js";
+import type { MarketData } from "./core/market.js";
 
 /** A listing normalised across all marketplaces. */
 export interface Listing {
@@ -43,6 +43,11 @@ export interface FilterProfile {
    * Hard bounds (priceMin/priceMax) come from the user: the URL or /price.
    */
   typicalPrice?: { min: number | null; max: number | null } | null;
+  /**
+   * Models or editions that sell at clearly different prices ("standard", "digital", "slim", "pro").
+   * Each gets its own median. Undefined: not asked yet (older watches); []: the item has no such split.
+   */
+  variants?: string[];
 }
 
 export interface AiVerdict {
@@ -51,6 +56,8 @@ export interface AiVerdict {
   bundle: string[];
   score: number;
   reason: string;
+  /** One of profile.variants, null when unclear or the watch has none */
+  variant?: string | null;
 }
 
 export type Plan = "free" | "pro";
@@ -82,5 +89,5 @@ export interface Watch {
   lastRunAt: number | null;
   createdAt: number;
   /** Real market prices from the last /scan: feeds the deal score of live notifications. */
-  market: MarketStats | null;
+  market: MarketData | null;
 }

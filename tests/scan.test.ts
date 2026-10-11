@@ -11,7 +11,7 @@ import { renderReport } from "../src/report/html.js";
 import { ScanService } from "../src/services/scan.js";
 import { fakeHttp, fakeLlm, memRepo, seedUser, seedWatch, willhabenHtml, XBOX_PROFILE, type FakeAd } from "./helpers.js";
 
-const PS5_PROFILE = { ...XBOX_PROFILE, item: "PS5 console", mustAny: [["playstation", "5"], ["ps5"]], exclude: ["ps4"], accessoryWords: ["controller"], priceMin: 100, priceMax: null, useAi: true };
+const PS5_PROFILE = { ...XBOX_PROFILE, item: "PS5 console", mustAny: [["playstation", "5"], ["ps5"]], exclude: ["ps4"], accessoryWords: ["controller"], priceMin: 100, priceMax: null, useAi: true, variants: [] as string[] };
 
 /** Batch fake: reads "[i] title | price | body" lines and answers per line. */
 function batchLlm(judge: (title: string) => Partial<{ relevant: boolean; condition: string; bundle: string[]; suspicious: boolean; note: string }>) {

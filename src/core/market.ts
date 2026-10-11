@@ -11,6 +11,17 @@ export interface MarketStats {
   at: number; // when computed (ms)
 }
 
+/** What a scan stores on the watch: the overall numbers plus one set per variant that had enough prices. */
+export interface MarketData extends MarketStats {
+  variants?: Record<string, MarketStats>;
+}
+
+/** The numbers a listing of this variant is compared with: its own variant when known, else the overall ones. */
+export function statsFor(m: MarketData | null, variant: string | null | undefined): { stats: MarketStats | null; variant: string | null } {
+  const v = variant ? m?.variants?.[variant] : undefined;
+  return v ? { stats: v, variant: variant! } : { stats: m, variant: null };
+}
+
 /** Linear-interpolated quantile of a sorted array. */
 export function quantile(sorted: number[], q: number): number {
   if (sorted.length === 0) throw new Error("quantile of empty array");

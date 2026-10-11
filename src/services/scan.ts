@@ -1,6 +1,7 @@
 import type { BatchClassifier, BatchVerdict } from "../ai/batch.js";
 import { applyRules, type RuleResult } from "../core/filter.js";
-import { marketStats, scoreDeal, type DealScore, type MarketStats } from "../core/market.js";
+import { marketStats, scoreDeal, statsFor, type DealScore, type MarketData, type MarketStats } from "../core/market.js";
+import { VARIANT_MIN_N } from "../core/variants.js";
 import { PLANS } from "../core/plans.js";
 import type { Repo } from "../db/repo.js";
 import { siteById } from "../sites/index.js";
@@ -11,6 +12,8 @@ export interface ScoredItem {
   listing: Listing;
   verdict: BatchVerdict | null; // null: not checked by AI (off, budget, error)
   deal: DealScore;
+  /** The variant whose median scored this listing; null: scored against the overall median */
+  variant: string | null;
 }
 
 export interface ScanReport {
@@ -24,6 +27,8 @@ export interface ScanReport {
   highlights: ScoredItem[]; // working units, good price
   flips: ScoredItem[]; // broken units cheap enough to repair or resell
   stats: MarketStats | null;
+  /** Per-variant numbers, most listings first; empty when the item has no variants or too few prices */
+  variants: { name: string; stats: MarketStats }[];
   aiChecked: number;
   aiUnchecked: number;
   pageLimitHit: boolean;
@@ -84,6 +89,14 @@ export class ScanService {
       return { ok: false, error: "fetch_failed", detail: (e as Error).message };
     }
 
+    // older watches have no variants yet: decide once and keep them in the profile
+    // (re-read: the caller may hold a copy from before the last scan saved them)
+    watch = this.repo.getWatch(watch.id) ?? watch;
+    if (watch.profile.useAi && this.batch.enabled && watch.profile.variants === undefined) {
+      const variants = await this.batch.variantsFor(watch);
+      watch = this.repo.updateWatch(watch.id, { profile: { ...watch.profile, variants } }) ?? { ...watch, profile: { ...watch.profile, variants } };
+    }
+
     const p = watch.profile;
     const passed: { listing: Listing; rule: RuleResult }[] = [];
     const ruleDropped: ScanReport["ruleDropped"] = [];
@@ -114,19 +127,35 @@ export class ScanService {
 
     const isDefect = (k: (typeof kept)[number]) => k.rule.defect || k.verdict?.condition === "defect";
     // The market price is what working units sell for: defects and scam-flagged listings stay out of the median
+    const priced = kept.filter((k) => !isDefect(k) && !k.verdict?.suspicious && k.listing.price !== null);
     const stats = marketStats(
-      kept.filter((k) => !isDefect(k) && !k.verdict?.suspicious && k.listing.price !== null).map((k) => k.listing.price!),
+      priced.map((k) => k.listing.price!),
       this.now(),
     );
+    // A Pro is compared with Pros and a Digital with Digitals; variants with too few prices use the overall median
+    const variants: ScanReport["variants"] = [];
+    for (const name of p.variants ?? []) {
+      const prices = priced.filter((k) => k.verdict?.variant === name).map((k) => k.listing.price!);
+      const vs = prices.length >= VARIANT_MIN_N ? marketStats(prices, this.now()) : null;
+      if (vs) variants.push({ name, stats: vs });
+    }
+    variants.sort((a, b) => b.stats.n - a.stats.n);
+    const market: MarketData | null = stats
+      ? { ...stats, ...(variants.length ? { variants: Object.fromEntries(variants.map((v) => [v.name, v.stats])) } : {}) }
+      : null;
 
-    const items: ScoredItem[] = kept.map((k) => ({
-      listing: k.listing,
-      verdict: k.verdict,
-      deal: scoreDeal(
-        { price: k.listing.price, bundleItems: k.verdict?.bundle.length ?? 0, defect: isDefect(k), suspicious: !!k.verdict?.suspicious },
-        stats,
-      ),
-    }));
+    const items: ScoredItem[] = kept.map((k) => {
+      const ref = statsFor(market, k.verdict?.variant);
+      return {
+        listing: k.listing,
+        verdict: k.verdict,
+        variant: ref.variant,
+        deal: scoreDeal(
+          { price: k.listing.price, bundleItems: k.verdict?.bundle.length ?? 0, defect: isDefect(k), suspicious: !!k.verdict?.suspicious },
+          ref.stats,
+        ),
+      };
+    });
     const broken = (i: ScoredItem) => (i.deal.tags.includes("defect") ? 1 : 0);
     // best score first; on a tie working units before broken ones, then cheaper first
     items.sort(
@@ -143,14 +172,14 @@ export class ScanService {
       .slice(0, MAX_HIGHLIGHTS);
     const flips = items.filter((i) => trusted(i) && isBroken(i) && (i.deal.score ?? 0) >= FLIP_MIN_SCORE).slice(0, MAX_FLIPS);
 
-    if (stats) this.repo.setMarket(watch.id, stats);
+    if (market) this.repo.setMarket(watch.id, market);
 
     const aiChecked = items.filter((i) => i.verdict).length + aiDropped.length;
     onProgress?.({ stage: "done" });
     return {
       ok: true,
       report: {
-        watch: { ...watch, market: stats ?? watch.market },
+        watch: { ...watch, market: market ?? watch.market },
         at: this.now(),
         pages: fetched.pages,
         total: fetched.listings.length,
@@ -160,6 +189,7 @@ export class ScanService {
         highlights,
         flips,
         stats,
+        variants,
         aiChecked,
         aiUnchecked: useAi ? passed.length - aiChecked : 0,
         pageLimitHit: fetched.pageLimitHit,

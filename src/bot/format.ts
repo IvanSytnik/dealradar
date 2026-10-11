@@ -1,7 +1,8 @@
 import { PLANS } from "../core/plans.js";
 import type { Preview } from "../services/watches.js";
 import type { ScanReport } from "../services/scan.js";
-import { pct, RELIABLE_N, vsMedian } from "../core/market.js";
+import { pct, RELIABLE_N, statsFor, vsMedian, type MarketStats } from "../core/market.js";
+import { variantLabel } from "../core/variants.js";
 import type { Dict } from "../i18n/index.js";
 import type { ListingInfo } from "../services/notifier.js";
 import type { Listing, User, Watch } from "../types.js";
@@ -24,7 +25,11 @@ export function listingText(t: Dict, watch: Watch, l: Listing, info: ListingInfo
   lines.push(info.oldPrice !== null ? `💶 <b>${eur(l.price)}</b> <s>${eur(info.oldPrice)}</s>` : `💶 <b>${eur(l.price)}</b>`);
   if (l.location) lines.push(`📍 ${esc(l.location)}`);
   if (info.defect || info.verdict?.condition === "defect") lines.push(t.looksDefect);
-  if (watch.market && l.price !== null) lines.push(t.vsMedian(pct(vsMedian(l.price, watch.market), t), eur(watch.market.median)));
+  const ref = statsFor(watch.market, info.verdict?.variant);
+  if (ref.stats && l.price !== null) {
+    const delta = pct(vsMedian(l.price, ref.stats), t);
+    lines.push(ref.variant ? t.vsMedianVariant(delta, esc(variantLabel(ref.variant)), eur(ref.stats.median)) : t.vsMedian(delta, eur(ref.stats.median)));
+  }
   const v = info.verdict;
   if (v) {
     if (v.bundle.length) lines.push(`📦 ${esc(v.bundle.join(", "))}`);
@@ -58,6 +63,16 @@ function marketLine(t: Dict, w: Watch): string {
   return t.marketNone;
 }
 
+/** "Pro 1250 € (21) · Slim 560 € (9)", most listings first */
+export function variantList(vs: { name: string; stats: MarketStats }[], counts = true): string {
+  return vs.map((v) => `${esc(variantLabel(v.name))} ${eur(v.stats.median)}${counts ? ` (${v.stats.n})` : ""}`).join(" · ");
+}
+
+const storedVariants = (w: Watch) =>
+  Object.entries(w.market?.variants ?? {})
+    .map(([name, stats]) => ({ name, stats }))
+    .sort((a, b) => b.stats.n - a.stats.n);
+
 /** Compact watch card: what a user needs at a glance. Filter internals live in the settings view. */
 export function profileSummary(t: Dict, w: Watch): string {
   const p = w.profile;
@@ -66,6 +81,7 @@ export function profileSummary(t: Dict, w: Watch): string {
     `🎯 ${esc(p.item)}`,
     t.priceLine(priceRange(t, p.priceMin, p.priceMax)),
     marketLine(t, w),
+    ...(storedVariants(w).length ? [t.variantsLine(variantList(storedVariants(w), false))] : []),
     t.statusLine(intervalLabel(t, w.intervalSec), p.useAi, p.allowDefect),
     `🔗 <a href="${esc(w.query.url)}">${t.openSearch}</a>`,
   ].join("\n");
@@ -143,6 +159,7 @@ export function scanSummaryText(t: Dict, r: ScanReport, opts: { link?: boolean }
   if (s) {
     lines.push(t.scanMedian(eur(s.median), eur(s.p25), eur(s.p75), eur(s.min), eur(s.max), s.n));
     if (s.n < RELIABLE_N) lines.push(t.scanFewPrices(s.n));
+    if (r.variants.length) lines.push(t.variantsLine(variantList(r.variants)), `<i>${t.scanVariantsNote}</i>`);
   } else {
     lines.push(t.scanNoStats);
   }
@@ -151,8 +168,8 @@ export function scanSummaryText(t: Dict, r: ScanReport, opts: { link?: boolean }
     const tags = h.deal.tags.filter((x) => x !== "cheap" && x !== "very_cheap").map((x) => t.tag[x]);
     lines.push(
       `${i + 1}. <a href="${esc(h.listing.url)}">${esc(h.listing.title.slice(0, 60))}</a> · <b>${eur(h.listing.price)}</b> · ${
-        h.deal.delta !== null ? pct(h.deal.delta, t) : ""
-      }${tags.length ? ` · ${tags.join(", ")}` : ""}`,
+        h.variant ? `${esc(variantLabel(h.variant))}: ` : ""
+      }${h.deal.delta !== null ? pct(h.deal.delta, t) : ""}${tags.length ? ` · ${tags.join(", ")}` : ""}`,
     );
   });
   if (r.flips.length) {

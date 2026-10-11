@@ -4,7 +4,7 @@ import { dirname } from "node:path";
 import { isLang, type Lang } from "../i18n/index.js";
 import type { AiVerdict, FilterProfile, Plan, SearchQuery, User, Watch } from "../types.js";
 import { MIGRATIONS } from "./migrations.js";
-import type { MarketStats } from "../core/market.js";
+import type { MarketData } from "../core/market.js";
 
 export type SeenStatus = "new" | "price_drop" | "seen";
 
@@ -39,7 +39,7 @@ function rowToWatch(r: any): Watch {
     nextRunAt: r.next_run_at,
     lastRunAt: r.last_run_at,
     createdAt: r.created_at,
-    market: r.market_json ? (JSON.parse(r.market_json) as MarketStats) : null,
+    market: r.market_json ? (JSON.parse(r.market_json) as MarketData) : null,
   };
 }
 
@@ -195,7 +195,7 @@ export class Repo {
     return this.getWatch(id);
   }
 
-  setMarket(id: number, m: MarketStats | null) {
+  setMarket(id: number, m: MarketData | null) {
     this.db.prepare("UPDATE watches SET market_json = ? WHERE id = ?").run(m ? JSON.stringify(m) : null, id);
   }
 

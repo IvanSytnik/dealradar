@@ -3,6 +3,7 @@ import { z } from "zod";
 import { DEFECT_WORDS, GAME_WORDS, GENERIC_ACCESSORIES } from "../core/lexicon.js";
 import { normalize, tokens } from "../core/normalize.js";
 import { parsePrice } from "../core/price.js";
+import { sanitizeVariants } from "../core/variants.js";
 import type { FilterProfile, SearchQuery } from "../types.js";
 import { logger } from "../logger.js";
 import { extractJson, type Llm } from "./llm.js";
@@ -41,7 +42,10 @@ const aiProfileSchema = z.object({
   accessory_words: words(40).default([]),
   price_min: price,
   price_max: price,
+  variants: z.array(z.unknown()).catch([]).default([]).transform(sanitizeVariants),
 });
+
+const VARIANTS_RULE = `2-6 models or editions of the item the user may accept that sell at clearly different used prices, as short lowercase names (PS5: ["standard", "digital", "slim", "slim digital", "pro"]; iPhone 13: ["mini", "standard", "pro", "pro max"]). [] when the item has no such split or the search already names one exact variant.`;
 
 const SYSTEM = `You configure a listing filter for the Austrian marketplace Willhaben (German-language listings).
 Given the user's search, return ONLY a JSON object:
@@ -51,7 +55,8 @@ Given the user's search, return ONLY a JSON object:
  "exclude": ["..."],                      // German/English title words that mean it is NOT the item: other models of the same family, games, cases, covers, chargers, spare parts sold alone, empty boxes. Lowercase word stems are fine ("huelle" matches "huellen").
  "accessory_words": ["..."],               // accessories that are fine as part of a bundle but not alone (e.g. "controller" for a console). Lowercase.
  "price_min": number|null,                  // EUR. Below this it is almost certainly an accessory or a scam, roughly 35% of the typical used price.
- "price_max": number|null                   // EUR. Roughly 130% of the typical used price; null if unknowable.
+ "price_max": number|null,                  // EUR. Roughly 130% of the typical used price; null if unknowable.
+ "variants": ["..."]                        // ${VARIANTS_RULE}
 }
 Do not put words from must_any into exclude. Write umlauts as ae/oe/ue, ß as ss.
 Anything that is often sold TOGETHER with the item (controllers, games, cables, cases, chargers) goes into accessory_words, never into exclude: "PS5 + 2 Controller" must still match.
@@ -114,6 +119,7 @@ export async function buildProfile(
       exclude: exclude.length,
       accessories: accessoryWords.length,
       price: [prices.min, prices.max],
+      variants: p.variants,
       rawPrice: [p.price_min, p.price_max],
     });
     // The user's own price range in the URL wins over the AI guess
@@ -130,6 +136,7 @@ export async function buildProfile(
         priceMin: q.priceFrom ?? roundPrice(prices.min),
         priceMax: q.priceTo,
         typicalPrice: prices.min === null && prices.max === null ? null : { min: roundPrice(prices.min), max: roundPrice(prices.max) },
+        variants: p.variants,
         useAi: true,
       },
     };
@@ -137,6 +144,24 @@ export async function buildProfile(
     logger.warn("ai profile failed, using fallback", { keyword: q.keyword, err: String((e as Error)?.message ?? e).slice(0, 300), reply: reply.slice(0, 500) });
     // The profile failed, but per-listing AI screening can still work
     return { profile: { ...base, useAi: true }, source: "fallback" };
+  }
+}
+
+const VARIANTS_SYSTEM = `A buyer searches a marketplace for an item. Return ONLY JSON: {"variants": ["..."]}
+variants: ${VARIANTS_RULE}`;
+
+/**
+ * Variants for a watch created before profiles had them. One small call, then stored in the profile;
+ * [] on any failure, so the scan falls back to the single overall median.
+ */
+export async function suggestVariants(item: string, keyword: string, llm: Llm): Promise<string[]> {
+  try {
+    const reply = await llm(VARIANTS_SYSTEM, `Item: ${item}\nSearch keyword: "${keyword}"`, 200);
+    const v = z.object({ variants: z.array(z.unknown()) }).parse(extractJson(reply));
+    return sanitizeVariants(v.variants);
+  } catch (e) {
+    logger.warn("variant suggestion failed", { item, err: String((e as Error)?.message ?? e).slice(0, 200) });
+    return [];
   }
 }
 

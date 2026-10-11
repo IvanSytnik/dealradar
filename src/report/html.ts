@@ -1,4 +1,5 @@
 import { pct, RELIABLE_N } from "../core/market.js";
+import { variantLabel } from "../core/variants.js";
 import { t as dict, type Dict, type Lang } from "../i18n/index.js";
 import type { ScanReport, ScoredItem } from "../services/scan.js";
 
@@ -16,10 +17,13 @@ function row(t: Dict, i: ScoredItem, rank: number): string {
   const bundle = i.verdict?.bundle.length ? `<div class="sub">📦 ${esc(i.verdict.bundle.join(", "))}</div>` : "";
   const note = i.verdict?.note ? `<div class="sub">${esc(i.verdict.note)}</div>` : i.verdict ? "" : `<div class="sub muted">${esc(t.report.notChecked)}</div>`;
   const img = safeUrl(l.image);
-  return `<tr data-score="${i.deal.score ?? -1}" data-price="${l.price ?? ""}" data-delta="${i.deal.delta ?? ""}" data-tags="${i.deal.tags.join(" ")}">
+  // the AI's model guess, even when it had too few listings for its own median (then the delta is vs. all models)
+  const model = i.verdict?.variant ?? "";
+  const modelTag = model ? `<span class="tag t-model">${esc(variantLabel(model))}</span>` : "";
+  return `<tr data-score="${i.deal.score ?? -1}" data-price="${l.price ?? ""}" data-delta="${i.deal.delta ?? ""}" data-tags="${i.deal.tags.join(" ")}" data-variant="${esc(model)}">
   <td class="num">${rank}</td>
   <td class="pic">${img ? `<img loading="lazy" src="${img}" alt="">` : ""}</td>
-  <td><a href="${safeUrl(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.title)}</a><div class="m-price">${eur(l.price)}${i.deal.delta === null ? "" : ` · ${i.deal.delta > 0 ? "+" : ""}${Math.round(i.deal.delta * 100)}%`}</div>${bundle}${note}<div class="tags">${tags}</div></td>
+  <td><a href="${safeUrl(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.title)}</a><div class="m-price">${eur(l.price)}${i.deal.delta === null ? "" : ` · ${i.deal.delta > 0 ? "+" : ""}${Math.round(i.deal.delta * 100)}%`}</div>${bundle}${note}<div class="tags">${modelTag}${tags}</div></td>
   <td class="num pr">${eur(l.price)}</td>
   <td class="num dl">${i.deal.delta === null ? "—" : `${i.deal.delta > 0 ? "+" : ""}${Math.round(i.deal.delta * 100)}%`}</td>
   <td class="num"><b>${i.deal.score ?? "—"}</b></td>
@@ -45,7 +49,7 @@ export function renderReport(r: ScanReport, lang: Lang): string {
     ? r.highlights
         .map(
           (h) => `<li><a href="${safeUrl(h.listing.url)}" target="_blank" rel="noopener noreferrer">${esc(h.listing.title)}</a>
-          <b>${eur(h.listing.price)}</b> · ${h.deal.delta !== null ? esc(pct(h.deal.delta, t)) : ""} · ${esc(R.score(h.deal.score ?? 0))}</li>`,
+          <b>${eur(h.listing.price)}</b> · ${h.variant ? `${esc(variantLabel(h.variant))}: ` : ""}${h.deal.delta !== null ? esc(pct(h.deal.delta, t)) : ""} · ${esc(R.score(h.deal.score ?? 0))}</li>`,
         )
         .join("")
     : `<li class="muted">${esc(R.noHighlights)}</li>`;
@@ -60,6 +64,27 @@ export function renderReport(r: ScanReport, lang: Lang): string {
     : "";
 
   const tagsPresent = [...new Set(r.items.flatMap((i) => i.deal.tags))];
+
+  const variantRow = (name: string, v: { median: number; p25: number; p75: number; n: number }, cls = "") =>
+    `<tr${cls ? ` class="${cls}"` : ""}><td>${esc(name)}</td><td class="num"><b>${eur(v.median)}</b></td><td class="num">${eur(v.p25)} – ${eur(v.p75)}</td><td class="num">${v.n}</td></tr>`;
+  const variantsBlock =
+    s && r.variants.length
+      ? `<h2>${esc(R.variantsTitle)}</h2><p class="muted">${esc(R.variantsNote)}</p>
+<div class="wrap"><table class="vt"><thead><tr><th>${esc(R.colModel)}</th><th class="num">${esc(R.median)}</th><th class="num">${esc(R.typical)}</th><th class="num">${esc(R.colCount)}</th></tr></thead><tbody>
+${r.variants.map((v) => variantRow(variantLabel(v.name), v.stats)).join("\n")}
+${variantRow(R.allModels, s, "all")}
+</tbody></table></div>`
+      : "";
+  // chips for every model the AI named in this report, most common first
+  const modelCounts = new Map<string, number>();
+  for (const i of r.items) if (i.verdict?.variant) modelCounts.set(i.verdict.variant, (modelCounts.get(i.verdict.variant) ?? 0) + 1);
+  const models = [...modelCounts.entries()].sort((a, b) => b[1] - a[1]).map(([m]) => m);
+  const modelChips =
+    models.length >= 2
+      ? `<div class="chips" id="models"><button class="chip" aria-pressed="true" data-variant="">${esc(R.allModels)}</button>${models
+          .map((m) => `<button class="chip" aria-pressed="false" data-variant="${esc(m)}">${esc(variantLabel(m))} (${modelCounts.get(m)})</button>`)
+          .join("")}</div>`
+      : "";
 
   return `<!doctype html>
 <html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -82,7 +107,8 @@ table{border-collapse:collapse;width:100%;min-width:720px}th,td{padding:8px 10px
 th{font-size:13px;color:var(--muted);user-select:none;white-space:nowrap;position:sticky;top:0;background:var(--card)}
 td.num{text-align:right;white-space:nowrap}td.loc{font-size:13px;color:var(--muted)}td.pic img{width:64px;height:48px;object-fit:cover;border-radius:6px}
 .sub{font-size:13px;color:var(--muted);margin-top:2px}.tags{margin-top:4px}.tag{display:inline-block;font-size:12px;border-radius:6px;padding:1px 6px;margin:2px 4px 0 0;background:var(--bg);border:1px solid var(--line)}
-.t-very_cheap,.t-cheap{color:var(--acc)}.t-suspicious{color:var(--hot)}
+.t-very_cheap,.t-cheap{color:var(--acc)}.t-model{font-weight:600}
+table.vt{min-width:0}table.vt tr.all td{color:var(--muted)}.t-suspicious{color:var(--hot)}
 footer{margin-top:24px;font-size:13px;color:var(--muted)}
 .m-price{display:none}
 @media (max-width:640px){table{min-width:0}th.pic,td.pic,th.loc,td.loc,th.dl,td.dl,th.pr,td.pr{display:none}.m-price{display:block;font-weight:600;margin-top:2px}th,td{padding:8px 6px}}
@@ -92,6 +118,8 @@ footer{margin-top:24px;font-size:13px;color:var(--muted)}
 ${s && s.n < RELIABLE_N ? `<p class="muted">${esc(R.fewPrices(s.n))}</p>` : ""}
 <div class="cards">${statCards.map(([k, v]) => `<div class="card"><div class="k">${esc(k!)}</div><div class="v">${esc(v!)}</div></div>`).join("")}</div>
 
+${variantsBlock}
+
 <h2>${esc(R.highlights)}</h2>
 <ol class="hl">${highlights}</ol>
 ${flips}
@@ -99,6 +127,7 @@ ${flips}
 <h2>${esc(R.all(r.items.length))}</h2>
 <p class="muted">${esc(R.sorted)}</p>
 <div class="nojs">${esc(R.noJs)}</div>
+${modelChips}
 <div class="chips" id="chips"><button class="chip" aria-pressed="true" data-tag="">${esc(R.chipAll)}</button>${tagsPresent
     .map((x) => `<button class="chip" aria-pressed="false" data-tag="${x}">${esc(t.tag[x])}</button>`)
     .join("")}</div>
@@ -139,9 +168,16 @@ ${r.items.map((i, n) => row(t, i, n + 1)).join("\n")}
       var x=k==='rank'?+a.cells[0].textContent:parseFloat(a.dataset[k]);var y=k==='rank'?+b.cells[0].textContent:parseFloat(b.dataset[k]);
       if(isNaN(x))return 1;if(isNaN(y))return -1;return dir[k]?x-y:y-x;});
     rows.forEach(function(r){tb.appendChild(r);});});});
-  document.querySelectorAll('.chip').forEach(function(c){c.addEventListener('click',function(){
-    document.querySelectorAll('.chip').forEach(function(x){x.setAttribute('aria-pressed','false');});c.setAttribute('aria-pressed','true');
-    var t=c.dataset.tag;[].forEach.call(tb.rows,function(r){r.style.display=!t||(' '+r.dataset.tags+' ').indexOf(' '+t+' ')>=0?'':'none';});});});
+  /* two independent filters: deal tag AND model */
+  var f={tag:'',variant:''};
+  var apply=function(){[].forEach.call(tb.rows,function(r){
+    var okT=!f.tag||(' '+r.dataset.tags+' ').indexOf(' '+f.tag+' ')>=0,okV=!f.variant||r.dataset.variant===f.variant;
+    r.style.display=okT&&okV?'':'none';});};
+  ['chips','models'].forEach(function(id){var box=document.getElementById(id);if(!box)return;
+    var key=id==='chips'?'tag':'variant';
+    box.querySelectorAll('.chip').forEach(function(c){c.addEventListener('click',function(){
+      box.querySelectorAll('.chip').forEach(function(x){x.setAttribute('aria-pressed','false');});c.setAttribute('aria-pressed','true');
+      f[key]=c.dataset[key];apply();});});});
 })();
 </script></body></html>`;
 }
