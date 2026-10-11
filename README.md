@@ -7,6 +7,7 @@ Paste a Willhaben search link (or just type `ps5 digital`). The bot works out wh
 
 - **Four languages:** German, English, Ukrainian, Russian. Picked from the Telegram app language, changeable with `/lang` (the choice then sticks). The AI writes its item description, reasons and notes in the same language; the HTML report and the command menu are localised too. Locales are type-checked against the reference, and a test renders every string to check that its Telegram HTML is balanced.
 - **Onboarding in one tap.** `/start` explains the bot in two lines and offers example searches (PS5, iPhone 13, E-Bike) that create a watch immediately; `/help` is split into topics, including how to copy a search link from the Willhaben app.
+- **Kleinanzeigen.de (beta).** Second adapter for Germany: `/s-<category>/<keyword>/k0c<id>` search URLs, `seite:N` pagination (both verified against the live site), `article.aditem` parsing with fallbacks and explicit "blocked" vs "layout changed" errors. Users are told it is in beta; the parser-health alert covers the rest. `npm run probe -- "<url>"` checks any adapter against the live site.
 - **Link in, watch out.** The bot accepts any Willhaben search URL (keyword, category, region, price) or plain text. It canonicalises the URL to newest first and strips tracking params.
 - **Auto filter profile.** The AI reads the query and returns match groups (`series s | xbox s | xss`), exclusions (other models, cases, games), accessory words (fine in a bundle, not alone) and a sane price range. All of it is plain words, never regexes, and validated with zod. Without AI there is a deterministic fallback.
 - **Three filter layers:** marketplace-wide German lexicon (wanted ads, swaps, empty boxes, defects), then the per-watch rules, then the AI verdict (relevant, condition, bundle, deal score 1–10). Rule-rejected listings never cost an AI call.
@@ -14,7 +15,7 @@ Paste a Willhaben search link (or just type `ps5 digital`). The bot works out wh
 - **Several watches per user**, each with its own interval, price range, stop words, AI toggle, defect policy and score threshold. The card shows only what matters (item, price, real market median, status) with four buttons; filter internals and toggles sit one tap deeper in ⚙️ Settings, text commands cover fine-tuning.
 - **Instant preview.** On creation the bot shows how many current listings pass and why others were dropped, so a bad filter is visible in seconds. It then memorises everything already online, so only genuinely new listings are sent.
 - **Price-drop alerts** with the old price struck through.
-- **Market analysis (`/scan`).** Reads every page of a search (5 on Free, 20 on Pro), filters with rules, screens the rest with the AI in batches of 20, computes the real median and quartiles, and scores each listing against them. Highlights deals, lists cheap broken units separately for repair/resale, flags suspiciously cheap ones. Sends a summary to the chat with a link to the sortable HTML report (S3 + CloudFront, 30 days), plus the file as a copy. The median is stored and used in live notifications ("18 % below the median").
+- **Market analysis (`/scan`).** Reads every page of a search (5 on Free, 20 on Pro), filters with rules, screens the rest with the AI in batches of 20, computes the real median and quartiles, and scores each listing against them. Highlights deals, lists cheap broken units separately for repair/resale, flags suspiciously cheap ones. Sends a summary with the full sortable report from all pages as a **Telegram Mini App** (opens inside Telegram, takes the Telegram theme from the launch hash, opens listings via `web_app_open_link`), a browser link as fallback (S3 + CloudFront, 30 days) and the file as a copy. The median is stored and used in live notifications ("18 % below the median").
 - **Plans and limits** (Free / Pro): number of watches, minimum interval, AI calls per day. Admin `/grant`.
 - **Privacy and erasure:** `/privacy` says what is stored, where (AWS Stockholm) and what goes to the AI; `/delete_me` erases the user and everything keyed by them in one transaction (GDPR Art. 17).
 - **Invites:** `/invite` gives a personal `?start=ref_<id>` link; a brand-new user who joins through it and the inviter each get 7 days of Pro (stacking, time-limited, self-invites and repeat joins ignored).
@@ -39,6 +40,14 @@ tests/          vitest: unit, service, scheduler with fake clock, bot end-to-end
 The core does not depend on Telegram or Anthropic. Both sit behind ports (`Notifier`, `Llm`), which is why the scheduler and the bot are tested end-to-end without network access.
 
 **Adding a marketplace:** implement `SiteAdapter` (`matches`, `parseSearchUrl`, `searchUrlFromText`, `parseListings`), register it in `sites/index.ts`, and add a fixture test. The lexicon is German; a non-German site needs its own lexicon (see roadmap).
+
+## Check a site adapter against the live site
+
+```bash
+npm run probe -- "https://www.kleinanzeigen.de/s-konsolen/ps5/k0c279" 2
+# on the server (Session Manager shell): sudo docker exec dealradar npx tsx src/tools/probe.ts "<url>"
+```
+Prints the canonical URL, listings per page, the first few parsed listings and how many miss a price, place, image or text. Exit code 1 when nothing parsed.
 
 ## Run locally
 
@@ -105,7 +114,7 @@ Deep link `t.me/<bot>?start=<base64url keyword>` creates a watch straight from a
 ## Roadmap to a product
 
 1. **Payments:** Telegram Stars (`sendInvoice`, currency `XTR`) for Pro, monthly subscription, `pre_checkout_query` handler, plan expiry column.
-2. **More sites:** Kleinanzeigen.de, eBay, Vinted, Avito; per-site lexicons; one watch across several sites.
+2. **More sites:** take Kleinanzeigen out of beta, then eBay, Vinted; per-site lexicons; one watch across several sites.
 3. **Price intelligence:** keep listing history per query to show "15% below the median for the last 30 days", which gives a better deal score than the model's guess.
 4. **Speed as a paid feature:** Pro checks every minute; later, priority queue and proxy pool.
 5. **Scale:** move from SQLite to Postgres and run the poller as separate workers with a job queue once there are more than ~2k active watches; Telegram webhook instead of long polling.
