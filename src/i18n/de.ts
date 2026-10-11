@@ -120,6 +120,7 @@ export const de: Dict = {
   scanFetchFailed: (detail) => `Die Suche ließ sich nicht laden: ${detail}`,
   scanCrashed: "Die Analyse ist fehlgeschlagen, bitte später nochmal.",
   scanUsage: "Gib die Nummer des Suchauftrags an: <code>/scan 3</code>. Nummern stehen in /list.",
+  scanPick: "📊 Welche Suche soll ich analysieren?",
   scanStartingToast: "Starte die Analyse…",
   fileCaptionLink: (days) => `Der Bericht als Datei. Der Link oben gilt ${days} Tage und hat Sortierung und Filter.`,
   fileCaptionNoLink: "Ganzer Bericht. Sortierung und Filter funktionieren, wenn du die Datei im Browser öffnest (nicht in der Telegram-Vorschau am Handy).",
@@ -170,8 +171,8 @@ export const de: Dict = {
 <b>So geht's:</b> Schick einen Willhaben-Suchlink oder schreib einfach, was du suchst, z. B. <code>ps5 digital</code>.
 
 Probier ein Beispiel 👇`,
-  btnHowLink: "🔗 Wie bekomme ich den Link?",
-  btnWhatCan: "🤖 Was kann der Bot?",
+  btnHowLink: "🔗 Link holen",
+  btnWhatCan: "🤖 Funktionen",
   btnLanguage: "🌐 Sprache",
   helpLabels: {
     about: "🤖 Funktionen",

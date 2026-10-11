@@ -119,6 +119,7 @@ export const en: Dict = {
   scanFetchFailed: (detail) => `Couldn't load the search: ${detail}`,
   scanCrashed: "The analysis failed, please try again later.",
   scanUsage: "Give the watch number: <code>/scan 3</code>. Numbers are in /list.",
+  scanPick: "📊 Which search should I analyse?",
   scanStartingToast: "Starting the analysis…",
   fileCaptionLink: (days) => `The report as a file. The link above works for ${days} days and has sorting and filters.`,
   fileCaptionNoLink: "Full report. Sorting and filters work when you open the file in a browser (not in Telegram's preview on a phone).",

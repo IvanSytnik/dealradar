@@ -119,6 +119,7 @@ export const uk: Dict = {
   scanFetchFailed: (detail) => `Не вдалося завантажити пошук: ${detail}`,
   scanCrashed: "Аналіз завершився з помилкою, спробуй пізніше.",
   scanUsage: "Вкажи номер відстеження: <code>/scan 3</code>. Номери в /list.",
+  scanPick: "📊 Який пошук проаналізувати?",
   scanStartingToast: "Запускаю аналіз…",
   fileCaptionLink: (days) => `Копія звіту файлом. Посилання вище працює ${days} днів, сортування й фільтри там.`,
   fileCaptionNoLink: "Повний звіт. Сортування й фільтри працюють, якщо відкрити файл у браузері (у перегляді Telegram на телефоні ні).",
@@ -170,12 +171,12 @@ export const uk: Dict = {
 <b>Як почати:</b> надішли посилання на пошук Willhaben або просто напиши, що шукаєш, наприклад <code>ps5 digital</code>.
 
 Спробуй на прикладі 👇`,
-  btnHowLink: "🔗 Як взяти посилання",
+  btnHowLink: "🔗 Посилання",
   btnWhatCan: "🤖 Що вміє",
   btnLanguage: "🌐 Мова",
   helpLabels: {
     about: "🤖 Що вміє",
-    link: "🔗 Як взяти посилання",
+    link: "🔗 Посилання",
     filter: "🧹 Фільтр і ШІ",
     scan: "📊 Аналіз ринку",
     plan: "💎 Тарифи",

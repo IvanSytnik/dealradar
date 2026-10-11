@@ -59,6 +59,15 @@ describe("i18n", () => {
     for (const text of render(t(l))) expect(text, text.slice(0, 80)).not.toMatch(/[А-Яа-яЁёІіЇїЄє]/);
   });
 
+  it("button labels are short enough not to be cut on a phone (two per row)", () => {
+    for (const l of LANGS) {
+      const T = t(l);
+      for (const label of [T.btnHowLink, T.btnWhatCan, ...Object.values(T.helpLabels), T.btnSettings, T.btnScan, T.btnPreview, T.btnWords]) {
+        expect([...label].length, `${l}: ${label}`).toBeLessThanOrEqual(20);
+      }
+    }
+  });
+
   it("help and the card render in every language", () => {
     const repo = memRepo();
     seedUser(repo);

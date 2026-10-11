@@ -207,6 +207,12 @@ describe("bot end-to-end", () => {
 
     await s.text("/scan 999");
     expect(s.texts().at(-1)).toMatch(/Укажи номер/);
+
+    // two watches and no number: offer them as buttons instead of asking for the number
+    await s.text("https://www.willhaben.at/iad/kaufen-und-verkaufen/marktplatz?keyword=ps5");
+    await s.text("/scan");
+    expect(s.texts().at(-1)).toMatch(/Какой поиск/);
+    expect(s.buttons().map((b) => b.callback_data)).toEqual(s.repo.listWatches(42).map((w) => `scan:${w.id}`));
   });
 
   it("a published report comes as a link button, with the file as a copy", async () => {

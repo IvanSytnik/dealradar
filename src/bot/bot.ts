@@ -308,6 +308,11 @@ export function createBot(deps: {
     const { user, T } = who(ctx);
     const list = repo.listWatches(user.id);
     const id = parseId(ctx.match.trim()) ?? (list.length === 1 ? list[0]!.id : null);
+    if (!id && list.length > 1) {
+      const kb = new InlineKeyboard();
+      for (const x of list) kb.text(`📊 #${x.id} ${x.name}`, cb("scan", x.id)).row();
+      return reply(ctx, T.scanPick, kb);
+    }
     const w = id ? repo.getUserWatch(user.id, id) : null;
     if (!w) return reply(ctx, T.scanUsage);
     startScan(ctx, user, w);

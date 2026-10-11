@@ -128,6 +128,7 @@ export const ru = {
   scanFetchFailed: (detail: string) => `Не удалось загрузить поиск: ${detail}`,
   scanCrashed: "Анализ упал с ошибкой, попробуй позже.",
   scanUsage: "Укажи номер отслеживания: <code>/scan 3</code>. Номера в /list.",
+  scanPick: "📊 Какой поиск проанализировать?",
   scanStartingToast: "Запускаю анализ…",
   fileCaptionLink: (days: number) => `Копия отчёта файлом. Ссылка выше работает ${days} дней, сортировка и фильтры там.`,
   fileCaptionNoLink: "Полный отчёт. Сортировка и фильтры работают, если открыть файл в браузере (в просмотре Telegram на телефоне нет).",
