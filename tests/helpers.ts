@@ -111,3 +111,42 @@ export function fakeHttp(pages: Record<string, string> | ((url: string) => strin
   };
   return { get, calls };
 }
+
+export interface FakeKaAd {
+  id: number;
+  title: string;
+  price?: string;
+  location?: string;
+  body?: string;
+  image?: string;
+  top?: boolean;
+}
+
+/** A Kleinanzeigen.de results page in the long-standing `article.aditem` markup. */
+export function kleinanzeigenHtml(ads: FakeKaAd[]): string {
+  const items = ads
+    .map(
+      (a) => `<li class="ad-listitem${a.top ? " is-topad" : ""}">
+  <article class="aditem" data-adid="${a.id}" data-href="/s-anzeige/${a.title.toLowerCase().replace(/\W+/g, "-")}/${a.id}-279-704">
+    <div class="aditem-image"><div class="imagebox srpimagebox">${a.image ? `<img src="${a.image}" alt="">` : ""}</div></div>
+    <div class="aditem-main">
+      <div class="aditem-main--top">
+        <div class="aditem-main--top--left"><i class="icon icon-small icon-pin"></i>
+          ${a.location ?? "10115 Mitte"}
+        </div>
+        <div class="aditem-main--top--right">Heute, 12:30</div>
+      </div>
+      <div class="aditem-main--middle">
+        <h2 class="text-module-begin"><a class="ellipsis" href="/s-anzeige/x/${a.id}-279-704">${a.title}</a></h2>
+        <p class="aditem-main--middle--description">${a.body ?? ""}</p>
+        <div class="aditem-main--middle--price-shipping">
+          <p class="aditem-main--middle--price-shipping--price">${a.price ?? ""}</p>
+        </div>
+      </div>
+    </div>
+  </article>
+</li>`,
+    )
+    .join("\n");
+  return `<!doctype html><html><body><ul id="srchrslt-adtable" class="itemlist">${items}</ul></body></html>`;
+}

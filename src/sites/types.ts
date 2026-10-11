@@ -6,6 +6,8 @@ export type HttpGet = (url: string) => Promise<string>;
 export interface SiteAdapter {
   id: string;
   name: string;
+  /** Not verified against the live site yet: the bot says so when a watch is created. */
+  beta?: boolean;
   /** Does this adapter handle the URL? */
   matches(url: URL): boolean;
   /** Turn a pasted search URL into a canonical query (newest first). Throws if it is not a search page. */

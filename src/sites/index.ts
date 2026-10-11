@@ -1,7 +1,8 @@
 import type { SiteAdapter } from "./types.js";
+import { kleinanzeigen } from "./kleinanzeigen.js";
 import { willhaben } from "./willhaben.js";
 
-export const SITES: SiteAdapter[] = [willhaben];
+export const SITES: SiteAdapter[] = [willhaben, kleinanzeigen];
 export const DEFAULT_SITE = willhaben;
 
 export function siteById(id: string): SiteAdapter {

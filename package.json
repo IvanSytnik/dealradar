@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "probe": "tsx src/tools/probe.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.60.0",
@@ -21,6 +22,7 @@
     "better-sqlite3": "^11.10.0",
     "dotenv": "^16.6.1",
     "grammy": "^1.46.0",
+    "node-html-parser": "^6.1.13",
     "tsx": "^4.23.15",
     "zod": "^3.25.76"
   },
