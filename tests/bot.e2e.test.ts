@@ -5,13 +5,14 @@ import { loadConfig } from "../src/config.js";
 import { WatchService } from "../src/services/watches.js";
 import { ScanService } from "../src/services/scan.js";
 import { BatchClassifier } from "../src/ai/batch.js";
+import type { ReportPublisher } from "../src/report/publish.js";
 import { fakeHttp, memRepo, willhabenHtml } from "./helpers.js";
 
 const USER = { id: 42, is_bot: false, first_name: "Ivan", username: "ivan" };
 const CHAT = { id: 42, type: "private" as const, first_name: "Ivan" };
 const LINK = "https://www.willhaben.at/iad/kaufen-und-verkaufen/marktplatz?keyword=xbox+series+s&areaId=6";
 
-function setup(opts: { admin?: boolean } = {}) {
+function setup(opts: { admin?: boolean; reports?: ReportPublisher } = {}) {
   const repo = memRepo();
   const http = fakeHttp(() =>
     willhabenHtml([
@@ -22,7 +23,7 @@ function setup(opts: { admin?: boolean } = {}) {
   );
   const config = loadConfig({ TELEGRAM_BOT_TOKEN: "123456:TEST-TOKEN", ADMIN_IDS: opts.admin === false ? "7" : "42" } as NodeJS.ProcessEnv);
   const scans = new ScanService(repo, http.get, new BatchClassifier(repo, null));
-  const bot = createBot({ config, repo, watches: new WatchService(repo, http.get, null), aiEnabled: false, scans });
+  const bot = createBot({ config, repo, watches: new WatchService(repo, http.get, null), aiEnabled: false, scans, reports: opts.reports });
   bot.botInfo = {
     ...USER,
     id: 1,
@@ -63,21 +64,68 @@ function setup(opts: { admin?: boolean } = {}) {
     } as Update);
 
   const texts = () => sent.filter((s) => s.method === "sendMessage").map((s) => s.payload.text as string);
+  /** Every button label/data of the last message or markup edit. */
+  const buttons = () => {
+    const last = [...sent].reverse().find((s) => s.payload?.reply_markup?.inline_keyboard);
+    return (last?.payload.reply_markup.inline_keyboard as { text: string; callback_data?: string; url?: string }[][]).flat();
+  };
   const idle = () => (bot as unknown as { idleScans: () => Promise<void> }).idleScans();
-  return { repo, sent, text, press, texts, idle };
+  const lastEdit = () => [...sent].reverse().find((x) => x.method === "editMessageText");
+  return { repo, sent, text, press, texts, idle, buttons, lastEdit };
 }
 
 describe("bot end-to-end", () => {
   it("start → link → watch card + preview", async () => {
     const s = setup();
     await s.text("/start");
-    expect(s.texts()[0]).toMatch(/слежу за объявлениями/);
+    expect(s.texts()[0]).toMatch(/следит за объявлениями/);
+    expect(s.buttons().map((b) => b.text)).toEqual(expect.arrayContaining(["🎮 PS5", "🔗 Как взять ссылку"]));
 
     await s.text(`вот ${LINK}`);
     const all = s.texts().join("\n");
     expect(all).toMatch(/Готово/);
     expect(all).toMatch(/под фильтр подходит <b>3<\/b>/);
     expect(s.repo.listWatches(42)).toHaveLength(1);
+  });
+
+  it("an example button creates a watch in one tap", async () => {
+    const s = setup();
+    await s.text("/start");
+    await s.press("ex:0");
+    expect(s.repo.listWatches(42)[0]!.query.keyword).toBe("ps5");
+    expect(s.texts().join("\n")).toMatch(/Готово/);
+  });
+
+  it("help is split into topics you can switch between", async () => {
+    const s = setup();
+    await s.text("/help");
+    expect(s.texts().at(-1)).toMatch(/Что умеет DealRadar/);
+    await s.press("hlp:link"); // pressed on the help message: edits it in place
+    expect(s.lastEdit()?.payload.text).toMatch(/Поделиться/);
+    await s.press("hlp:scan:n"); // from the welcome screen: a new message
+    expect(s.texts().at(-1)).toMatch(/медиану/);
+    const edit = s.lastEdit();
+    expect(edit?.payload.text).toMatch(/Как взять ссылку/);
+    expect(edit?.payload.text).toMatch(/Поделиться/);
+  });
+
+  it("the card has few buttons; filter details and toggles live in settings", async () => {
+    const s = setup({ admin: false });
+    await s.text(LINK);
+    const id = s.repo.listWatches(42)[0]!.id;
+    await s.press(`opn:${id}`);
+    const main = s.buttons().map((b) => b.callback_data);
+    expect(main).toHaveLength(5);
+    expect(main).not.toContain(`del:${id}`);
+
+    await s.press(`set:${id}`);
+    const edit = s.lastEdit();
+    expect(edit?.payload.text).toMatch(/Настройки #/);
+    expect(s.buttons().map((b) => b.callback_data)).toEqual(expect.arrayContaining([`tgl:${id}:defect`, `del:${id}`, `opn:${id}`]));
+
+    await s.press(`tgl:${id}:defect`); // stays in settings
+    expect(s.lastEdit()?.payload.text).toMatch(/Настройки #/);
+    expect(s.repo.getWatch(id)!.profile.allowDefect).toBe(false);
   });
 
   it("plain text asks for confirmation, then creates", async () => {
@@ -131,9 +179,31 @@ describe("bot end-to-end", () => {
     const doc = s.sent.find((x) => x.method === "sendDocument");
     expect(doc).toBeDefined();
     expect(s.repo.getWatch(id)!.market?.median).toBe(230);
+    expect(all).toMatch(/в файле ниже/); // no publisher configured: file only
 
     await s.text("/scan 999");
     expect(s.texts().at(-1)).toMatch(/Укажи номер/);
+  });
+
+  it("a published report comes as a link button, with the file as a copy", async () => {
+    const published: string[] = [];
+    const s = setup({ reports: { publish: async (html) => (published.push(html), "https://reports.example/r/abc.html") } });
+    await s.text(LINK);
+    const id = s.repo.listWatches(42)[0]!.id;
+    await s.text(`/scan ${id}`);
+    await s.idle();
+    expect(published[0]).toMatch(/<!doctype html>/);
+    const summary = s.sent.find((x) => x.method === "sendMessage" && /Просмотрено/.test(x.payload.text));
+    expect(summary?.payload.reply_markup.inline_keyboard[0][0]).toEqual({ text: "🌐 Открыть полный отчёт", url: "https://reports.example/r/abc.html" });
+    expect(s.sent.find((x) => x.method === "sendDocument")).toBeDefined();
+  });
+
+  it("falls back to the file when publishing fails", async () => {
+    const s = setup({ reports: { publish: async () => null } });
+    await s.text(LINK);
+    await s.text(`/scan ${s.repo.listWatches(42)[0]!.id}`);
+    await s.idle();
+    expect(s.texts().join("\n")).toMatch(/в файле ниже/);
   });
 
   it("the admin (owner) gets Pro limits automatically", async () => {

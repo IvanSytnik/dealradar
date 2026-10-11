@@ -33,20 +33,58 @@ export function listingText(watch: Watch, l: Listing, info: ListingInfo): string
   return text.length > 1000 ? text.slice(0, 997) + "…" : text;
 }
 
+/** "от 120 €", "120–300 €", "до 300 €", "любая" */
+export function priceRange(min: number | null, max: number | null): string {
+  if (min !== null && max !== null) return `${eur(min)}–${eur(max)}`;
+  if (min !== null) return `от ${eur(min)}`;
+  if (max !== null) return `до ${eur(max)}`;
+  return "любая";
+}
+
+/**
+ * Market line: real numbers from the last scan win over the AI's guess, which is only a prior
+ * (the AI said ~120–260 € for an Xbox Series S while the scan found a 300 € median).
+ */
+function marketLine(w: Watch): string {
+  if (w.market) {
+    const days = Math.floor((Date.now() - w.market.at) / 86_400_000);
+    const age = days <= 0 ? "сегодня" : days === 1 ? "вчера" : `${days} дн. назад`;
+    return `📊 Рынок: медиана <b>${eur(w.market.median)}</b> (обычно ${eur(w.market.p25)}–${eur(w.market.p75)}), ${age}`;
+  }
+  const t = w.profile.typicalPrice;
+  if (t?.max) return `📊 Рынок: ~${eur(t.min)}–${eur(t.max)} по оценке ИИ. Точнее покажет «Анализ рынка»`;
+  return "📊 Рынок: нажми «Анализ рынка», чтобы узнать реальные цены";
+}
+
+/** Compact watch card: what a user needs at a glance. Filter internals live in the settings view. */
 export function profileSummary(w: Watch): string {
   const p = w.profile;
-  const groups = p.mustAny.length ? p.mustAny.map((g) => g.join(" ")).join(" | ") : "любой заголовок";
   return [
-    `<b>#${w.id} ${esc(w.name)}</b> ${w.active ? "🟢" : "⏸"}`,
-    `🎯 Ищу: ${esc(p.item)}`,
-    `🔤 В заголовке: <code>${esc(groups)}</code>`,
-    `🚫 Исключить: ${p.exclude.length ? `<code>${esc(p.exclude.join(", "))}</code>` : "—"}`,
-    `🧩 Аксессуары (только в комплекте): ${p.accessoryWords.length ? `<code>${esc(p.accessoryWords.join(", "))}</code>` : "—"}`,
-    `💶 Цена: ${eur(p.priceMin)} … ${p.priceMax === null ? "без потолка" : eur(p.priceMax)}` +
-      (p.typicalPrice?.max ? ` · обычно ~${eur(p.typicalPrice.min)}–${eur(p.typicalPrice.max)} (для оценки ИИ)` : ""),
-    `🤖 ИИ: ${p.useAi ? `вкл, порог ${p.minScore}/10` : "выкл"} · ⚠️ Дефектные: ${p.allowDefect ? "да" : "нет"}`,
-    `⏱ Проверка: каждые ${intervalLabel(w.intervalSec)}`,
-    `🔗 <a href="${esc(w.query.url)}">Поиск на сайте</a>`,
+    `<b>#${w.id} ${esc(w.name)}</b> ${w.active ? "🟢" : "⏸ на паузе"}`,
+    `🎯 ${esc(p.item)}`,
+    `💶 Цена: ${priceRange(p.priceMin, p.priceMax)}`,
+    marketLine(w),
+    `⏱ Раз в ${intervalLabel(w.intervalSec)} · 🤖 ИИ ${p.useAi ? "вкл" : "выкл"}${p.allowDefect ? " · ⚠️ с дефектами" : ""}`,
+    `🔗 <a href="${esc(w.query.url)}">Открыть поиск</a>`,
+  ].join("\n");
+}
+
+/** Everything the filter does, shown in the settings view. */
+export function filterDetails(w: Watch): string {
+  const p = w.profile;
+  const groups = p.mustAny.length ? p.mustAny.map((g) => g.join(" ")).join(" | ") : "любой заголовок";
+  const list = (xs: string[]) => (xs.length ? `<code>${esc(xs.join(", "))}</code>` : "—");
+  return [
+    `⚙️ <b>Настройки #${w.id} ${esc(w.name)}</b>`,
+    "",
+    `🔤 В заголовке должно быть одно из: <code>${esc(groups)}</code>`,
+    `🚫 Стоп-слова: ${list(p.exclude)}`,
+    `🧩 Аксессуары (ок только в комплекте): ${list(p.accessoryWords)}`,
+    `💶 Цена: ${priceRange(p.priceMin, p.priceMax)}`,
+    `🤖 ИИ: ${p.useAi ? `вкл, присылаю от ${p.minScore}/10` : "выкл, только правила"}`,
+    `⚠️ Дефектные / на запчасти: ${p.allowDefect ? "присылать" : "отсеивать"}`,
+    "",
+    "<i>Слова, цену и порог меняй кнопкой «✏️ Слова и цена».</i>",
   ].join("\n");
 }
 
@@ -96,7 +134,7 @@ export function previewText(p: Preview, limits = { passed: 15, dropped: 5 }): st
   return lines.join("\n");
 }
 
-export function scanSummaryText(r: ScanReport): string {
+export function scanSummaryText(r: ScanReport, opts: { link?: boolean } = {}): string {
   const s = r.stats;
   const lines = [
     `📊 <b>Анализ рынка: ${esc(r.watch.name)}</b>`,
@@ -130,7 +168,12 @@ export function scanSummaryText(r: ScanReport): string {
       `⚠️ <b>ИИ не проверил ${r.aiUnchecked} из ${r.items.length}</b> (дневной лимит). Непроверенные не попадают в «Интересное», а в списке может быть мусор (аксессуары, другие модели).`,
     );
   }
-  lines.push("", "Полный список с сортировкой в файле ниже. Медиана сохранена: новые уведомления будут сравниваться с ней.");
+  lines.push(
+    "",
+    opts.link
+      ? "Полный список с сортировкой и фильтрами по кнопке ниже. Медиана сохранена: новые уведомления будут сравниваться с ней."
+      : "Полный список в файле ниже. Медиана сохранена: новые уведомления будут сравниваться с ней.",
+  );
   return lines.join("\n");
 }
 
@@ -167,21 +210,86 @@ export function planText(user: User, watches: number, aiToday: number): string {
   ].join("\n");
 }
 
-export const WELCOME = `👋 Я слежу за объявлениями и присылаю только то, что тебе нужно.
+export const WELCOME = `👋 <b>DealRadar</b> следит за объявлениями на willhaben.at и присылает только то, что ты ищешь: без аксессуаров, обменов и мусора. И сразу говорит, дешевле ли это рынка.
 
-<b>Как начать</b>
-1. Открой поиск на willhaben.at, настрой фильтры, скопируй ссылку
-2. Пришли её сюда. Или просто напиши, что ищешь: <code>ps5 digital</code>
-3. Я сам пойму, что ты ищешь, отсею аксессуары и мусор, и буду присылать новые объявления
+<b>Как начать:</b> пришли ссылку на поиск Willhaben или просто напиши, что ищешь, например <code>ps5 digital</code>.
 
-/list мои отслеживания
-/plan тариф и лимиты
-/help все команды`;
+Попробуй на примере 👇`;
 
-export const HELP = `<b>Команды</b>
-Ссылка или текст: новое отслеживание
-/list список и управление
-/price, /exclude, /unexclude, /match, /score, /rename: тонкая настройка (подсказка в карточке отслеживания)
-/plan тариф
+/** One-tap examples on the welcome screen: the fastest way to see what the bot does. */
+export const EXAMPLES = ["ps5", "iphone 13", "e-bike"] as const;
+export const EXAMPLE_LABELS = ["🎮 PS5", "📱 iPhone 13", "🚲 E-Bike"] as const;
 
-Под каждым объявлением есть «👎 Не то». Бот учится на этих отметках.`;
+export type HelpTopic = "about" | "link" | "filter" | "scan" | "plan";
+
+export const HELP_TOPICS: { id: HelpTopic; label: string }[] = [
+  { id: "about", label: "🤖 Что умеет" },
+  { id: "link", label: "🔗 Как взять ссылку" },
+  { id: "filter", label: "🧹 Фильтр и ИИ" },
+  { id: "scan", label: "📊 Анализ рынка" },
+  { id: "plan", label: "💎 Тарифы" },
+];
+
+export function helpText(topic: HelpTopic): string {
+  switch (topic) {
+    case "about":
+      return `🤖 <b>Что умеет DealRadar</b>
+
+• <b>Следит за поиском</b> и присылает новые объявления через минуты после публикации, а также снижения цены
+• <b>Отсеивает мусор:</b> аксессуары без самого товара, «suche», обмены, пустые коробки, другие модели
+• <b>Оценивает сделку:</b> на сколько дешевле рынка, что в комплекте, есть ли дефект
+• <b>Анализ рынка:</b> читает все страницы поиска и показывает медиану цен и лучшие предложения
+• <b>Учится:</b> кнопки 👎/👍 под объявлением помогают ИИ понять, что тебе нужно
+
+Можно вести несколько отслеживаний сразу: /list`;
+    case "link":
+      return `🔗 <b>Как взять ссылку на поиск</b>
+
+Текстового запроса (<code>ps5 digital</code>) хватает для старта. Ссылка нужна, если важны регион, категория или цена.
+
+<b>В приложении Willhaben</b>
+1. Найди товар и настрой фильтры: регион, цена, состояние
+2. Нажми «Поделиться» (значок ↗ вверху) → «Копировать»
+3. Вставь ссылку сюда
+
+<b>В браузере</b>
+1. Открой willhaben.at, найди товар, выставь фильтры
+2. Скопируй адрес из адресной строки
+3. Вставь сюда
+
+⚠️ Нужна ссылка на <b>страницу поиска</b> (список объявлений), а не на одно объявление.`;
+    case "filter":
+      return `🧹 <b>Как работает фильтр</b>
+
+Каждое объявление проходит три ступени:
+1. <b>Общие правила:</b> «suche», «tausche», пустые коробки, дефекты
+2. <b>Твой фильтр:</b> в заголовке должна быть модель, стоп-слова отсекают лишнее, аксессуары ок только в комплекте
+3. <b>ИИ</b> читает объявление целиком и ставит оценку 1–10: подходит ли товар, состояние, что в комплекте
+
+Фильтр собирается сам из запроса. Поправить его можно в карточке: /list → отслеживание → ⚙️ Настройки.
+
+При создании и по кнопке «🧪 Превью» видно, что прошло и что отсеялось. Так ошибку в фильтре видно сразу.`;
+    case "scan":
+      return `📊 <b>Анализ рынка</b>
+
+Бот читает все страницы поиска, отбирает подходящие объявления и считает:
+• <b>медиану</b> и типичный диапазон цен
+• <b>лучшие предложения</b> (дешевле медианы, проверены ИИ)
+• <b>дефектные дёшево</b> для ремонта и перепродажи
+• <b>подозрительно дешёвые</b>: возможный обман
+
+Медиана запоминается, и новые уведомления показывают «на 18% дешевле рынка».
+
+Запуск: /list → отслеживание → 📊 Анализ рынка, или <code>/scan 3</code>.`;
+    case "plan":
+      return `💎 <b>Тарифы</b>
+
+<b>Free</b>: ${PLANS.free.maxWatches} отслеживания, проверка раз в ${intervalLabel(PLANS.free.minIntervalSec)}, ${PLANS.free.aiPerDay} ИИ-проверок и ${PLANS.free.scansPerDay} анализа рынка в день (до ${PLANS.free.scanPages} стр.)
+
+<b>Pro</b>: ${PLANS.pro.maxWatches} отслеживаний, проверка раз в ${intervalLabel(PLANS.pro.minIntervalSec)}, ${PLANS.pro.aiPerDay} ИИ-проверок и ${PLANS.pro.scansPerDay} анализов в день (до ${PLANS.pro.scanPages} стр.)
+
+Твой тариф и расход: /plan`;
+  }
+}
+
+export const HELP = helpText("about");

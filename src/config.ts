@@ -21,6 +21,10 @@ const schema = z.object({
   TICK_SECONDS: z.coerce.number().default(15),
   // When true every new user starts on "pro" (handy for a private deployment)
   EVERYONE_PRO: bool,
+  // Optional: publish /scan reports to S3 + CloudFront so they open in a real browser (see infra/terraform)
+  REPORTS_BUCKET: z.string().optional().default(""),
+  REPORTS_BASE_URL: z.string().optional().default(""),
+  REPORTS_REGION: z.string().optional().default(""),
 });
 
 export type AppConfig = z.infer<typeof schema>;

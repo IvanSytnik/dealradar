@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { listingText, previewText, profileSummary, ruleReasonRu } from "../src/bot/format.js";
+import { filterDetails, listingText, previewText, priceRange, profileSummary, ruleReasonRu } from "../src/bot/format.js";
 import { createHttpGet, HttpError } from "../src/sites/http.js";
 import { listing, memRepo, seedUser, seedWatch } from "./helpers.js";
 
@@ -39,8 +39,32 @@ describe("format", () => {
     expect(t.length).toBeLessThanOrEqual(1000);
   });
 
-  it("summarises a profile and a preview", () => {
-    expect(profileSummary(w)).toContain("series s | xbox s | xss");
+  it("keeps the card short and moves filter internals to settings", () => {
+    const card = profileSummary(w);
+    expect(card).not.toContain("huelle"); // no stop-word dump on the main card
+    expect(card.split("\n").length).toBeLessThanOrEqual(6);
+    expect(card).toContain("Цена: 60 €–250 €");
+    const details = filterDetails(w);
+    expect(details).toContain("series s | xbox s | xss");
+    expect(details).toContain("huelle");
+  });
+
+  it("prefers the real market median over the AI price guess (scan said 300 €, AI ~120–260 €)", () => {
+    const guess = { ...w, profile: { ...w.profile, typicalPrice: { min: 120, max: 260 } } };
+    expect(profileSummary(guess)).toMatch(/~120 €–260 € по оценке ИИ/);
+    const real = { ...guess, market: { n: 14, median: 300, p25: 263, p75: 368, min: 200, max: 430, at: Date.now() } };
+    const card = profileSummary(real);
+    expect(card).toMatch(/медиана <b>300 €<\/b> \(обычно 263 €–368 €\), сегодня/);
+    expect(card).not.toContain("оценке ИИ");
+  });
+
+  it("formats price ranges", () => {
+    expect(priceRange(120, null)).toBe("от 120 €");
+    expect(priceRange(null, 300)).toBe("до 300 €");
+    expect(priceRange(null, null)).toBe("любая");
+  });
+
+  it("summarises a preview", () => {
     const p = previewText({
       total: 2,
       passed: [{ listing: listing({ id: "1", title: "A" }), rule: { pass: true, reason: "ok", defect: false } }],

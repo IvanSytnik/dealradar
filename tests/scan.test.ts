@@ -201,6 +201,10 @@ describe("HTML report", () => {
     expect(html).not.toMatch(/<script src=|<link rel="stylesheet"/); // no external resources
     expect(html).toContain("Медиана");
     expect(html).toContain("медиана приблизительная"); // 3 listings < RELIABLE_N
+    // iOS Telegram preview runs no JS: filters are hidden until the script marks the page, with a hint instead
+    expect(html).toMatch(/\.chips\{display:none/);
+    expect(html).toContain('class="nojs"');
+    expect(html).toContain("documentElement.className+=' js'");
   });
 });
 

@@ -69,11 +69,13 @@ main{max-width:1100px;margin:0 auto;padding:24px 16px 64px}h1{font-size:22px;mar
 .muted{color:var(--muted)}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}.card .k{color:var(--muted);font-size:13px}.card .v{font-size:18px;font-weight:600}
 ol.hl{padding-left:22px}ol.hl li{margin:6px 0}a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 12px}.chip{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:999px;padding:4px 10px;cursor:pointer;font:inherit;font-size:13px}
+.chips{display:none;flex-wrap:wrap;gap:6px;margin:8px 0 12px}.js .chips{display:flex}
+th[data-k]{cursor:default}.js th[data-k]{cursor:pointer}.js th[data-k]::after{content:" ↕";opacity:.5}
+.nojs{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:10px 12px;margin:8px 0 12px;font-size:14px}.js .nojs{display:none}.chip{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:999px;padding:4px 10px;cursor:pointer;font:inherit;font-size:13px}
 .chip[aria-pressed=true]{border-color:var(--acc);color:var(--acc)}
 .wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--card)}
 table{border-collapse:collapse;width:100%;min-width:720px}th,td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}
-th{font-size:13px;color:var(--muted);cursor:pointer;user-select:none;white-space:nowrap;position:sticky;top:0;background:var(--card)}
+th{font-size:13px;color:var(--muted);user-select:none;white-space:nowrap;position:sticky;top:0;background:var(--card)}
 td.num{text-align:right;white-space:nowrap}td.loc{font-size:13px;color:var(--muted)}td.pic img{width:64px;height:48px;object-fit:cover;border-radius:6px}
 .sub{font-size:13px;color:var(--muted);margin-top:2px}.tags{margin-top:4px}.tag{display:inline-block;font-size:12px;border-radius:6px;padding:1px 6px;margin:2px 4px 0 0;background:var(--bg);border:1px solid var(--line)}
 .t-very_cheap,.t-cheap{color:var(--acc)}.t-suspicious{color:var(--hot)}
@@ -91,6 +93,8 @@ ${s && s.n < RELIABLE_N ? `<p class="muted">Всего ${s.n} объявлени
 ${flips}
 
 <h2>Все подходящие (${r.items.length})</h2>
+<p class="muted">Отсортировано по оценке сделки, лучшие сверху.</p>
+<div class="nojs">Сортировка и фильтры не работают во встроенном просмотре Telegram. Открой отчёт по кнопке «🌐 Открыть полный отчёт» в чате с ботом или в браузере.</div>
 <div class="chips" id="chips"><button class="chip" aria-pressed="true" data-tag="">Все</button>${tagsPresent
     .map((t) => `<button class="chip" aria-pressed="false" data-tag="${t}">${esc(TAG_LABEL[t])}</button>`)
     .join("")}</div>
@@ -105,6 +109,7 @@ ${r.items.map((i, n) => row(i, n + 1)).join("\n")}
 </main>
 <script>
 (function(){
+  document.documentElement.className+=' js';
   var tb=document.querySelector('#t tbody');var dir={};
   document.querySelectorAll('th[data-k]').forEach(function(th){th.addEventListener('click',function(){
     var k=th.dataset.k;dir[k]=!dir[k];var rows=[].slice.call(tb.rows);

@@ -8,12 +8,18 @@ import { RecipientGoneError, type Notifier } from "../services/notifier.js";
 import type { WatchService } from "../services/watches.js";
 import type { ScanProgress, ScanService } from "../services/scan.js";
 import { renderReport } from "../report/html.js";
+import { REPORT_TTL_DAYS, type ReportPublisher } from "../report/publish.js";
 import type { Plan, User, Watch } from "../types.js";
 import { cb, parseId, parseIdAndList, parseIdAndRest, parsePriceArgs } from "./commands.js";
 import {
   editHelp,
   esc,
-  HELP,
+  EXAMPLE_LABELS,
+  EXAMPLES,
+  filterDetails,
+  HELP_TOPICS,
+  helpText,
+  type HelpTopic,
   intervalLabel,
   listingText,
   planText,
@@ -25,21 +31,44 @@ import {
 
 const HTML = { parse_mode: "HTML" as const, link_preview_options: { is_disabled: true } };
 
+/** Main card: the four things people actually do. Everything else is one tap deeper, in settings. */
 function watchKeyboard(w: Watch) {
   return new InlineKeyboard()
     .text(w.active ? "⏸ Пауза" : "▶️ Включить", cb("tgl", w.id, "active"))
+    .text("📊 Анализ рынка", cb("scan", w.id))
+    .row()
+    .text("⚙️ Настройки", cb("set", w.id))
     .text("🧪 Превью", cb("prv", w.id))
     .row()
+    .text("« Все отслеживания", cb("lst"));
+}
+
+function settingsKeyboard(w: Watch) {
+  return new InlineKeyboard()
     .text(w.profile.useAi ? "🤖 ИИ: вкл" : "🤖 ИИ: выкл", cb("tgl", w.id, "ai"))
-    .text(w.profile.allowDefect ? "⚠️ Дефект: да" : "⚠️ Дефект: нет", cb("tgl", w.id, "defect"))
+    .text(w.profile.allowDefect ? "⚠️ Дефекты: да" : "⚠️ Дефекты: нет", cb("tgl", w.id, "defect"))
     .row()
     .text(`⏱ ${intervalLabel(w.intervalSec)}`, cb("int", w.id))
-    .text("✏️ Настроить", cb("edt", w.id))
-    .row()
-    .text("📊 Анализ рынка: все страницы", cb("scan", w.id))
+    .text("✏️ Слова и цена", cb("edt", w.id))
     .row()
     .text("🗑 Удалить", cb("del", w.id))
-    .text("« Список", cb("lst"));
+    .text("« Назад", cb("opn", w.id));
+}
+
+function helpKeyboard(current: HelpTopic) {
+  const kb = new InlineKeyboard();
+  HELP_TOPICS.forEach((t, i) => {
+    kb.text(t.id === current ? `• ${t.label}` : t.label, cb("hlp", t.id));
+    if (i % 2 === 1) kb.row();
+  });
+  return kb;
+}
+
+function welcomeKeyboard() {
+  const kb = new InlineKeyboard();
+  EXAMPLE_LABELS.forEach((label, i) => kb.text(label, cb("ex", i)));
+  // ":n" = answer with a new message, so the example buttons stay on screen
+  return kb.row().text("🔗 Как взять ссылку", cb("hlp", "link", "n")).text("🤖 Что умеет", cb("hlp", "about", "n"));
 }
 
 export function createTelegramNotifier(bot: Bot): Notifier {
@@ -81,8 +110,15 @@ export function createTelegramNotifier(bot: Bot): Notifier {
   };
 }
 
-export function createBot(deps: { config: AppConfig; repo: Repo; watches: WatchService; aiEnabled: boolean; scans?: ScanService }) {
-  const { config, repo, watches, aiEnabled, scans } = deps;
+export function createBot(deps: {
+  config: AppConfig;
+  repo: Repo;
+  watches: WatchService;
+  aiEnabled: boolean;
+  scans?: ScanService;
+  reports?: ReportPublisher;
+}) {
+  const { config, repo, watches, aiEnabled, scans, reports } = deps;
   const bot = new Bot(config.TELEGRAM_BOT_TOKEN);
   const isAdmin = (id: number) => config.ADMIN_IDS.includes(id);
 
@@ -111,11 +147,19 @@ export function createBot(deps: { config: AppConfig; repo: Repo; watches: WatchS
     }
   }
 
+  async function showSettings(ctx: Context, w: Watch, edit = true) {
+    const opts = { ...HTML, reply_markup: settingsKeyboard(w) };
+    if (edit) await ctx.editMessageText(filterDetails(w), opts).catch(() => undefined);
+    else await ctx.reply(filterDetails(w), opts);
+  }
+
   async function showList(ctx: Context, user: User, edit = false) {
     const list = repo.listWatches(user.id);
     if (!list.length) {
-      const t = "Отслеживаний пока нет. Пришли ссылку на поиск Willhaben или напиши, что ищешь.";
-      return edit ? ctx.editMessageText(t, HTML).catch(() => undefined) : reply(ctx, t);
+      const t = "Отслеживаний пока нет. Пришли ссылку на поиск Willhaben или напиши, что ищешь. Или попробуй пример:";
+      return edit
+        ? ctx.editMessageText(t, { ...HTML, reply_markup: welcomeKeyboard() }).catch(() => undefined)
+        : reply(ctx, t, welcomeKeyboard());
     }
     const kb = new InlineKeyboard();
     for (const w of list) kb.text(`${w.active ? "🟢" : "⏸"} #${w.id} ${w.name}`, cb("opn", w.id)).row();
@@ -180,11 +224,19 @@ export function createBot(deps: { config: AppConfig; repo: Repo; watches: WatchS
         return;
       }
       await ctx.api.deleteMessage(status.chat.id, status.message_id).catch(() => undefined);
-      await reply(ctx, scanSummaryText(r.report));
+      const html = renderReport(r.report);
+      const url = reports ? await reports.publish(html) : null;
+      await reply(
+        ctx,
+        scanSummaryText(r.report, { link: Boolean(url) }),
+        url ? new InlineKeyboard().url("🌐 Открыть полный отчёт", url) : undefined,
+      );
       const day = new Date(r.report.at).toISOString().slice(0, 10);
       const file = `dealradar-${w.name.replace(/[^\p{L}\p{N}]+/gu, "-").toLowerCase()}-${day}.html`;
-      await ctx.replyWithDocument(new InputFile(Buffer.from(renderReport(r.report), "utf8"), file), {
-        caption: "Полный отчёт: открой файл в браузере, можно сортировать и фильтровать.",
+      await ctx.replyWithDocument(new InputFile(Buffer.from(html, "utf8"), file), {
+        caption: url
+          ? `Копия отчёта файлом. Ссылка выше работает ${REPORT_TTL_DAYS} дней, сортировка и фильтры там.`
+          : "Полный отчёт. Сортировка и фильтры работают, если открыть файл в браузере (в просмотре Telegram на телефоне нет).",
       });
     } finally {
       scanning.delete(user.id);
@@ -223,10 +275,10 @@ export function createBot(deps: { config: AppConfig; repo: Repo; watches: WatchS
         /* ignore */
       }
     }
-    await reply(ctx, WELCOME);
+    await reply(ctx, WELCOME, welcomeKeyboard());
   });
 
-  bot.command("help", (ctx) => reply(ctx, HELP));
+  bot.command("help", (ctx) => reply(ctx, helpText("about"), helpKeyboard("about")));
 
   bot.command("scan", async (ctx) => {
     const user = userOf(ctx);
@@ -337,13 +389,19 @@ export function createBot(deps: { config: AppConfig; repo: Repo; watches: WatchS
 
   bot.on("message:text", async (ctx) => {
     const text = ctx.message.text;
-    if (text.startsWith("/")) return reply(ctx, "Неизвестная команда. /help");
+    if (text.startsWith("/")) return reply(ctx, "Неизвестная команда. Помощь: /help");
     const user = userOf(ctx);
 
     if (extractUrl(text)) return createWatch(ctx, user, text);
 
     const kw = text.trim();
-    if (kw.length < 2 || kw.length > 80) return reply(ctx, "Пришли ссылку на поиск или коротко напиши, что ищешь.");
+    if (kw.length < 2 || kw.length > 80) {
+      return reply(
+        ctx,
+        "Пришли ссылку на поиск или коротко напиши, что ищешь.",
+        new InlineKeyboard().text("🔗 Как взять ссылку", cb("hlp", "link", "n")),
+      );
+    }
     pendingText.set(user.id, kw);
     return reply(
       ctx,
@@ -370,6 +428,29 @@ export function createBot(deps: { config: AppConfig; repo: Repo; watches: WatchS
     await ctx.deleteMessage().catch(() => undefined);
   });
 
+  bot.callbackQuery(/^ex:(\d)$/, async (ctx) => {
+    const kw = EXAMPLES[Number(ctx.match[1])];
+    if (!kw) return ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery(`Создаю «${kw}»…`);
+    const user = userOf(ctx);
+    repo.track(user.id, "example", { kw });
+    return createWatch(ctx, user, kw);
+  });
+
+  bot.callbackQuery(/^hlp:(about|link|filter|scan|plan)(:n)?$/, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const topic = ctx.match[1] as HelpTopic;
+    const opts = { ...HTML, reply_markup: helpKeyboard(topic) };
+    if (ctx.match[2]) await ctx.reply(helpText(topic), opts);
+    else await ctx.editMessageText(helpText(topic), opts).catch(() => undefined);
+  });
+
+  bot.callbackQuery(/^set:(\d+)$/, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const w = repo.getUserWatch(ctx.from.id, Number(ctx.match[1]));
+    if (w) await showSettings(ctx, w);
+  });
+
   bot.callbackQuery("lst", async (ctx) => {
     await ctx.answerCallbackQuery();
     await showList(ctx, userOf(ctx), true);
@@ -393,7 +474,9 @@ export function createBot(deps: { config: AppConfig; repo: Repo; watches: WatchS
         ? watches.setActive(user, id, !cur.active)
         : watches.toggle(user, id, what === "ai" ? "useAi" : "allowDefect");
     await ctx.answerCallbackQuery("Сохранено");
-    if (w) await showWatch(ctx, w, true);
+    if (!w) return;
+    if (what === "active") await showWatch(ctx, w, true);
+    else await showSettings(ctx, w);
   });
 
   bot.callbackQuery(/^int:(\d+)$/, async (ctx) => {
@@ -405,7 +488,7 @@ export function createBot(deps: { config: AppConfig; repo: Repo; watches: WatchS
       const locked = s < PLANS[user.plan].minIntervalSec;
       kb.text(`${locked ? "🔒 " : ""}${intervalLabel(s)}`, cb("ints", id, s));
     }
-    kb.row().text("« Назад", cb("opn", id));
+    kb.row().text("« Назад", cb("set", id));
     await ctx.editMessageReplyMarkup({ reply_markup: kb }).catch(() => undefined);
   });
 
@@ -417,7 +500,7 @@ export function createBot(deps: { config: AppConfig; repo: Repo; watches: WatchS
     }
     const w = watches.setInterval(user, Number(ctx.match[1]), sec);
     await ctx.answerCallbackQuery("Сохранено");
-    if (w) await showWatch(ctx, w, true);
+    if (w) await showSettings(ctx, w);
   });
 
   bot.callbackQuery(/^edt:(\d+)$/, async (ctx) => {
@@ -449,7 +532,7 @@ export function createBot(deps: { config: AppConfig; repo: Repo; watches: WatchS
     const id = Number(ctx.match[1]);
     await ctx
       .editMessageReplyMarkup({
-        reply_markup: new InlineKeyboard().text("Да, удалить", cb("delok", id)).text("Отмена", cb("opn", id)),
+        reply_markup: new InlineKeyboard().text("Да, удалить", cb("delok", id)).text("Отмена", cb("set", id)),
       })
       .catch(() => undefined);
   });
