@@ -65,3 +65,15 @@ variable "log_retention_days" {
   type        = number
   default     = 14
 }
+
+variable "enable_reports" {
+  description = "Publish /scan reports to a private S3 bucket behind CloudFront and send links instead of only files."
+  type        = bool
+  default     = true
+}
+
+variable "report_ttl_days" {
+  description = "Days a published report stays available."
+  type        = number
+  default     = 30
+}

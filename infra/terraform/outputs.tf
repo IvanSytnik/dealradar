@@ -32,3 +32,8 @@ output "log_group" {
   description = "Container logs: aws logs tail <group> --follow"
   value       = aws_cloudwatch_log_group.bot.name
 }
+
+output "reports_url" {
+  description = "CloudFront base URL of published /scan reports."
+  value       = var.enable_reports ? "https://${aws_cloudfront_distribution.reports[0].domain_name}" : null
+}

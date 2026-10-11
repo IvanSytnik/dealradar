@@ -76,6 +76,8 @@ resource "aws_instance" "bot" {
   metadata_options {
     http_tokens   = "required" # IMDSv2 only
     http_endpoint = "enabled"
+    # 2 hops: the bot runs in a Docker container and reads the instance role (S3 report uploads)
+    http_put_response_hop_limit = 2
   }
 
   root_block_device {
