@@ -8,6 +8,7 @@ import { logger } from "../logger.js";
 import { siteById } from "../sites/index.js";
 import type { HttpGet } from "../sites/types.js";
 import type { Listing, Watch } from "../types.js";
+import type { HealthMonitor } from "./health.js";
 import { RecipientGoneError, type Notifier } from "./notifier.js";
 
 export const MAX_NOTIFY_PER_RUN = 10;
@@ -33,6 +34,7 @@ export class Poller {
     private classifier: Classifier,
     private notifier: Notifier,
     private now: () => number = Date.now,
+    private health?: HealthMonitor,
   ) {}
 
   start(tickSec: number) {
@@ -65,14 +67,17 @@ export class Poller {
       await Promise.all(
         [...byUrl.entries()].map(async ([url, watches]) => {
           let listings: Listing[];
+          const site = watches[0]!.query.site;
           try {
             stats.fetches++;
             listings = await this.fetchWithCatchUp(url, watches, stats);
           } catch (e) {
             stats.errors++;
+            await this.health?.record({ site, url, count: null, error: (e as Error).message }).catch(() => undefined);
             for (const w of watches) await this.fail(w, (e as Error).message);
             return;
           }
+          await this.health?.record({ site, url, count: listings.length }).catch(() => undefined);
           for (const w of watches) stats.notified += await this.processWatch(w, listings);
         }),
       );

@@ -6,6 +6,7 @@ import { createBot, createTelegramNotifier, registerCommands } from "./bot/bot.j
 import { loadConfig } from "./config.js";
 import { openDb, Repo } from "./db/repo.js";
 import { logger } from "./logger.js";
+import { HealthMonitor } from "./services/health.js";
 import { Poller } from "./services/poller.js";
 import { WatchService } from "./services/watches.js";
 import { createHttpGet } from "./sites/http.js";
@@ -30,7 +31,15 @@ const reports =
       })
     : undefined;
 const bot = createBot({ config, repo, watches, aiEnabled: llm !== null, scans, reports });
-const poller = new Poller(repo, http, classifier, createTelegramNotifier(bot));
+const notifier = createTelegramNotifier(bot);
+// The owner hears about a broken parser before the users notice that alerts stopped
+const health = new HealthMonitor(async (text) => {
+  for (const id of config.ADMIN_IDS) {
+    await bot.api.sendMessage(id, text, { parse_mode: "HTML" }).catch((e) => logger.warn("health alert failed", { err: (e as Error).message }));
+  }
+  logger.warn("parser health", { text });
+});
+const poller = new Poller(repo, http, classifier, notifier, Date.now, health);
 
 async function main() {
   // Cosmetic (command menu): never block startup on it

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Classifier } from "../src/ai/classifier.js";
 import { FAILURE_ALERT_AT, MAX_NOTIFY_PER_RUN, MAX_PAGES, Poller } from "../src/services/poller.js";
 import { RecipientGoneError } from "../src/services/notifier.js";
+import { HealthMonitor } from "../src/services/health.js";
 import { clock, fakeHttp, fakeLlm, memRepo, query, RecordingNotifier, seedUser, seedWatch, willhabenHtml, XBOX_PROFILE, type FakeAd } from "./helpers.js";
 
 function setup(opts: { ads?: FakeAd[]; llm?: ReturnType<typeof fakeLlm>["llm"] } = {}) {
@@ -14,13 +15,16 @@ function setup(opts: { ads?: FakeAd[]; llm?: ReturnType<typeof fakeLlm>["llm"] }
     return willhabenHtml(ads);
   });
   const notifier = new RecordingNotifier();
-  const poller = new Poller(repo, http.get, new Classifier(repo, opts.llm ?? null), notifier, c.now);
+  const healthAlerts: string[] = [];
+  const health = new HealthMonitor(async (t) => void healthAlerts.push(t), c.now);
+  const poller = new Poller(repo, http.get, new Classifier(repo, opts.llm ?? null), notifier, c.now, health);
   return {
     c,
     repo,
     http,
     notifier,
     poller,
+    healthAlerts,
     setAds: (a: FakeAd[]) => (ads = a),
     setDown: (d: boolean) => (down = d),
     /** move time past every watch's next run */
@@ -253,5 +257,26 @@ describe("Poller page catch-up", () => {
     seedWatch(s2.repo, 1);
     s2.setPages({ 1: range(1, PAGE), 2: range(100, PAGE), 3: range(200, PAGE), 4: range(300, PAGE), 5: range(400, PAGE) });
     expect((await s2.poller.tick()).pages).toBe(MAX_PAGES);
+  });
+
+  it("tells the owner when every search keeps failing (layout change or IP block)", async () => {
+    const s = setup({ ads: [xbox(1)] });
+    seedUser(s.repo);
+    seedWatch(s.repo, 1);
+    seedWatch(s.repo, 1, { q: query("https://www.willhaben.at/iad/kaufen-und-verkaufen/marktplatz?keyword=ps5&sort=1&rows=30") });
+    s.setDown(true);
+    for (let i = 0; i < 4; i++) {
+      await s.poller.tick();
+      s.later();
+    }
+    // each tick here is 10 h apart, past the 6 h re-alert pause, so a lasting outage is repeated
+    expect(s.healthAlerts.length).toBeGreaterThanOrEqual(1);
+    expect(s.healthAlerts.every((a) => a.includes("HTTP 503"))).toBe(true);
+    s.setDown(false);
+    for (let i = 0; i < 12; i++) {
+      await s.poller.tick();
+      s.later();
+    }
+    expect(s.healthAlerts.at(-1)).toMatch(/снова работает/);
   });
 });
