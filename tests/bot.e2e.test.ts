@@ -97,7 +97,7 @@ describe("bot end-to-end", () => {
   it("speaks the user's Telegram language", async () => {
     const s = setup({ langCode: "de-AT" });
     await s.text("/start");
-    expect(s.texts()[0]).toMatch(/beobachtet willhaben\.at/);
+    expect(s.texts()[0]).toMatch(/beobachtet <b>willhaben\.at<\/b> 🇦🇹 und <b>kleinanzeigen\.de<\/b>/);
     expect(s.buttons().map((b) => b.text)).toContain("🌐 🇦🇹 Deutsch");
     await s.text(LINK);
     const all = s.texts().join("\n");
@@ -157,14 +157,21 @@ describe("bot end-to-end", () => {
     expect(s.repo.getWatch(id)!.profile.allowDefect).toBe(false);
   });
 
-  it("a Kleinanzeigen link creates a watch and says the site is in beta", async () => {
+  it("a Kleinanzeigen link creates a calmer watch: 10 min default, nothing under 5 min", async () => {
     const s = setup();
     await s.text("https://www.kleinanzeigen.de/s-konsolen/seite:2/xbox-series-s/k0c279");
     const w = s.repo.listWatches(42)[0]!;
     expect(w.query).toMatchObject({ site: "kleinanzeigen", url: "https://www.kleinanzeigen.de/s-konsolen/xbox-series-s/k0c279" });
     const all = s.texts().join("\n");
     expect(all).toMatch(/Xbox Series S · 190 €/);
-    expect(all).toMatch(/бета-режиме/);
+    expect(all).not.toMatch(/бета/);
+    expect(w.intervalSec).toBe(600); // admin is Pro: Willhaben would get 1 min
+
+    await s.press(`int:${w.id}`);
+    const offered = s.buttons().map((b) => b.callback_data).filter((d) => d?.startsWith("ints:"));
+    expect(offered).toEqual([`ints:${w.id}:300`, `ints:${w.id}:600`, `ints:${w.id}:1800`]);
+    await s.press(`ints:${w.id}:60`); // a stale button or a crafted callback
+    expect(s.repo.getWatch(w.id)!.intervalSec).toBe(300);
   });
 
   it("plain text asks for confirmation, then creates", async () => {

@@ -1,7 +1,7 @@
 {
   "name": "dealradar",
   "version": "2.0.0",
-  "description": "Telegram bot that watches marketplace searches (Willhaben first) and sends only relevant new listings, filtered by rules and AI",
+  "description": "Telegram bot that watches Willhaben and Kleinanzeigen searches, filters listings with rules and AI, and scores deals against real per-model market medians",
   "private": true,
   "type": "module",
   "engines": {

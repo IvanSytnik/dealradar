@@ -3,7 +3,7 @@ import { buildProfile } from "../ai/profile.js";
 import type { Llm } from "../ai/llm.js";
 import { applyRules, type RuleResult } from "../core/filter.js";
 import { normalize } from "../core/normalize.js";
-import { clampInterval, PLANS } from "../core/plans.js";
+import { clampInterval, defaultInterval, PLANS } from "../core/plans.js";
 import type { Repo } from "../db/repo.js";
 import { adapterForUrl, DEFAULT_SITE, extractUrl, siteById } from "../sites/index.js";
 import type { HttpGet } from "../sites/types.js";
@@ -78,7 +78,7 @@ export class WatchService {
       name: query.keyword.slice(0, 40),
       query,
       profile,
-      intervalSec: clampInterval(user.plan, limits.minIntervalSec),
+      intervalSec: defaultInterval(user.plan, siteById(query.site)),
     });
 
     // Seed with what is already online: the user only hears about listings posted from now on
@@ -176,8 +176,9 @@ export class WatchService {
   }
 
   setInterval(user: User, id: number, sec: number) {
-    if (!this.repo.getUserWatch(user.id, id)) return null;
-    return this.repo.updateWatch(id, { intervalSec: clampInterval(user.plan, sec) });
+    const w = this.repo.getUserWatch(user.id, id);
+    if (!w) return null;
+    return this.repo.updateWatch(id, { intervalSec: clampInterval(user.plan, sec, siteById(w.query.site)) });
   }
 
   rename(user: User, id: number, name: string) {

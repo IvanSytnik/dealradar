@@ -93,4 +93,9 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE users ADD COLUMN pro_until INTEGER;
   ALTER TABLE users ADD COLUMN referred_by INTEGER;
   `,
+  // v5: Kleinanzeigen gets a politeness floor of 5 min; watches created faster move to its 10 min default
+  `
+  UPDATE watches SET interval_sec = 600
+  WHERE json_extract(query_json, '$.site') = 'kleinanzeigen' AND interval_sec < 300;
+  `,
 ];

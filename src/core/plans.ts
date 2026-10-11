@@ -15,8 +15,18 @@ export const PLANS: Record<Plan, PlanLimits> = {
 
 export const INTERVAL_CHOICES = [60, 120, 300, 600, 1800];
 
-export function clampInterval(plan: Plan, sec: number): number {
-  return Math.max(PLANS[plan].minIntervalSec, Math.min(3600, Math.round(sec)));
+/** The fastest a watch may run: the plan's minimum, or the site's politeness floor when that is slower. */
+export function minInterval(plan: Plan, site?: { minIntervalSec?: number }): number {
+  return Math.max(PLANS[plan].minIntervalSec, site?.minIntervalSec ?? 0);
+}
+
+export function clampInterval(plan: Plan, sec: number, site?: { minIntervalSec?: number }): number {
+  return Math.max(minInterval(plan, site), Math.min(3600, Math.round(sec)));
+}
+
+/** Interval of a new watch: as fast as the plan allows, unless the site asks for a calmer default. */
+export function defaultInterval(plan: Plan, site?: { minIntervalSec?: number; defaultIntervalSec?: number }): number {
+  return clampInterval(plan, Math.max(PLANS[plan].minIntervalSec, site?.defaultIntervalSec ?? 0), site);
 }
 
 /** Pro days the inviter and the invited friend each get. */

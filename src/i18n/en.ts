@@ -128,11 +128,11 @@ export const en: Dict = {
   fileCaptionLink: (days) => `The report as a file. The link above works for ${days} days and has sorting and filters.`,
   fileCaptionNoLink: "Full report. Sorting and filters work when you open the file in a browser (not in Telegram's preview on a phone).",
 
-  noWatches: "No watches yet. Send a Willhaben search link or type what you're looking for. Or try an example:",
+  noWatches: "No watches yet. Send a Willhaben or Kleinanzeigen search link or type what you're looking for. Or try an example:",
   listTitle: (n, max) => `<b>Your watches</b> (${n}/${max})`,
   creating: "🔎 Looking at the search and setting up the filter…",
   errLimit: (max) => `Plan limit: ${max} watches. Delete one in /list or switch to Pro (/plan).`,
-  errUnsupported: (detail) => `Willhaben.at and Kleinanzeigen.de (beta) are supported. ${detail}`,
+  errUnsupported: (detail) => `Willhaben.at and Kleinanzeigen.de are supported. ${detail}`,
   errBadUrl: (detail) => `That doesn't look like a search page. Open a search (not a single listing) and send the link. ${detail}`,
   errFetch: (detail) => `Couldn't load the search, try again later. (${detail})`,
   errDuplicate: "You're already watching this search, see /list.",
@@ -171,9 +171,9 @@ export const en: Dict = {
   langPrompt: "🌐 Choose your language:",
   langSet: "Done, English it is.",
 
-  welcome: `👋 <b>DealRadar</b> watches willhaben.at and sends you only what you're looking for: no accessories, swaps or junk. And it tells you right away whether a listing is below market price.
+  welcome: `👋 <b>DealRadar</b> watches <b>willhaben.at</b> 🇦🇹 and <b>kleinanzeigen.de</b> 🇩🇪 and sends you only what you're looking for: no accessories, swaps or junk. And it tells you right away whether a listing is below market price, per model: a PS5 Pro is compared with Pros, a Digital with Digitals.
 
-<b>To start:</b> send a Willhaben search link or just type what you want, e.g. <code>ps5 digital</code>.
+<b>Getting started:</b> send a Willhaben or Kleinanzeigen search link. Or just type what you're looking for, e.g. <code>ps5 digital</code>: then I search Willhaben across Austria.
 
 Try an example 👇`,
   btnHowLink: "🔗 How to get a link",
@@ -188,10 +188,11 @@ Try an example 👇`,
   },
   helpAbout: `🤖 <b>What DealRadar does</b>
 
+• <b>Two marketplaces:</b> willhaben.at and kleinanzeigen.de
 • <b>Watches a search</b> and sends new listings minutes after they go up, plus price drops
 • <b>Filters out junk:</b> accessories without the item, “suche” (wanted) ads, swaps, empty boxes, other models
 • <b>Rates the deal:</b> how far below market, what's included, whether it's broken
-• <b>Market analysis:</b> reads every page of a search and shows the median price and the best offers
+• <b>Market analysis:</b> reads every page of a search and shows the median price per model and the best offers
 • <b>Learns:</b> the 👎/👍 buttons under each listing teach the AI what you want
 
 You can run several watches at once: /list · Language: /lang`,
@@ -209,7 +210,8 @@ A plain query (<code>ps5 digital</code>) is enough to start. Use a link when the
 2. Copy the address from the address bar
 3. Paste it here
 
-🧪 <b>Kleinanzeigen.de</b> (beta): same thing, a search page link from kleinanzeigen.de.
+<b>Kleinanzeigen.de</b>
+Open a search on kleinanzeigen.de, set the filters (city, radius, price) and send the page address. I check every 10 minutes, 5 at the fastest: more often and the site starts blocking.
 
 ⚠️ It has to be a link to a <b>search page</b> (a list of listings), not to a single listing.`,
   helpFilter: `🧹 <b>How the filter works</b>
@@ -266,7 +268,7 @@ Your plan and usage: /plan`,
   inviteText: (link, days, count) =>
     `🎁 <b>Invite a friend</b>\n\nWhen a friend starts the bot through your link, you both get <b>${days} days of Pro</b>.\n\n${link}${count ? `\n\nJoined through your link so far: ${count}` : ""}`,
   btnShare: "📤 Share",
-  shareText: "This bot sends only the Willhaben listings you want and tells you if they're below market price",
+  shareText: "This bot sends only the Willhaben and Kleinanzeigen listings you want and tells you if they're below market price",
   refWelcome: (days) => `🎁 A friend invited you: you get ${days} days of Pro as a gift.`,
   refRewarded: (days) => `🎉 A friend joined through your link: +${days} days of Pro.`,
   planProUntil: (date) => `Pro until ${date}`,

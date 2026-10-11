@@ -8,6 +8,10 @@ export interface SiteAdapter {
   name: string;
   /** Not verified against the live site yet: the bot says so when a watch is created. */
   beta?: boolean;
+  /** Politeness floor for this site, above the plan's minimum (seconds) */
+  minIntervalSec?: number;
+  /** Interval of a new watch on this site when the plan allows faster (seconds) */
+  defaultIntervalSec?: number;
   /** Does this adapter handle the URL? */
   matches(url: URL): boolean;
   /** Turn a pasted search URL into a canonical query (newest first). Throws if it is not a search page. */

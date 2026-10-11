@@ -129,11 +129,11 @@ export const de: Dict = {
   fileCaptionLink: (days) => `Der Bericht als Datei. Der Link oben gilt ${days} Tage und hat Sortierung und Filter.`,
   fileCaptionNoLink: "Ganzer Bericht. Sortierung und Filter funktionieren, wenn du die Datei im Browser öffnest (nicht in der Telegram-Vorschau am Handy).",
 
-  noWatches: "Noch keine Suchaufträge. Schick einen Willhaben-Suchlink oder schreib, was du suchst. Oder probier ein Beispiel:",
+  noWatches: "Noch keine Suchaufträge. Schick einen Suchlink von Willhaben oder Kleinanzeigen oder schreib, was du suchst. Oder probier ein Beispiel:",
   listTitle: (n, max) => `<b>Deine Suchaufträge</b> (${n}/${max})`,
   creating: "🔎 Ich schaue mir die Suche an und richte den Filter ein…",
   errLimit: (max) => `Tariflimit: ${max} Suchaufträge. Lösch einen in /list oder wechsle zu Pro (/plan).`,
-  errUnsupported: (detail) => `Unterstützt werden Willhaben.at und Kleinanzeigen.de (Beta). ${detail}`,
+  errUnsupported: (detail) => `Unterstützt werden Willhaben.at und Kleinanzeigen.de. ${detail}`,
   errBadUrl: (detail) => `Das sieht nicht nach einer Suchseite aus. Öffne eine Suche (keine einzelne Anzeige) und schick den Link. ${detail}`,
   errFetch: (detail) => `Die Suche ließ sich nicht laden, bitte später nochmal. (${detail})`,
   errDuplicate: "Diese Suche beobachtest du schon, siehe /list.",
@@ -172,9 +172,9 @@ export const de: Dict = {
   langPrompt: "🌐 Wähle deine Sprache:",
   langSet: "Erledigt, ab jetzt auf Deutsch.",
 
-  welcome: `👋 <b>DealRadar</b> beobachtet willhaben.at und schickt dir nur, was du wirklich suchst: kein Zubehör, kein Tausch, kein Müll. Und sagt dir sofort, ob eine Anzeige unter dem Marktpreis liegt.
+  welcome: `👋 <b>DealRadar</b> beobachtet <b>willhaben.at</b> 🇦🇹 und <b>kleinanzeigen.de</b> 🇩🇪 und schickt dir nur, was du wirklich suchst: kein Zubehör, kein Tausch, kein Müll. Und sagt dir sofort, ob eine Anzeige unter dem Marktpreis liegt, und zwar pro Modell: eine PS5 Pro wird mit Pros verglichen, eine Digital mit Digitals.
 
-<b>So geht's:</b> Schick einen Willhaben-Suchlink oder schreib einfach, was du suchst, z. B. <code>ps5 digital</code>.
+<b>So startest du:</b> schick einen Suchlink von Willhaben oder Kleinanzeigen. Oder schreib einfach, was du suchst, z. B. <code>ps5 digital</code>: dann suche ich auf Willhaben in ganz Österreich.
 
 Probier ein Beispiel 👇`,
   btnHowLink: "🔗 Link holen",
@@ -189,10 +189,11 @@ Probier ein Beispiel 👇`,
   },
   helpAbout: `🤖 <b>Was DealRadar kann</b>
 
+• <b>Zwei Marktplätze:</b> willhaben.at und kleinanzeigen.de
 • <b>Beobachtet deine Suche</b> und schickt neue Anzeigen wenige Minuten nach dem Erscheinen, dazu Preissenkungen
 • <b>Sortiert Müll aus:</b> Zubehör ohne den Artikel, „Suche“-Anzeigen, Tausch, leere Kartons, andere Modelle
 • <b>Bewertet das Angebot:</b> wie weit unter dem Marktpreis, was dabei ist, ob es defekt ist
-• <b>Marktanalyse:</b> liest alle Seiten einer Suche und zeigt den Medianpreis und die besten Angebote
+• <b>Marktanalyse:</b> liest alle Seiten einer Suche und zeigt den Medianpreis pro Modell und die besten Angebote
 • <b>Lernt dazu:</b> mit 👎/👍 unter jeder Anzeige zeigst du der KI, was du willst
 
 Du kannst mehrere Suchaufträge gleichzeitig laufen lassen: /list · Sprache: /lang`,
@@ -210,7 +211,8 @@ Für den Start reicht ein Suchbegriff (<code>ps5 digital</code>). Einen Link bra
 2. Kopier die Adresse aus der Adresszeile
 3. Füg sie hier ein
 
-🧪 <b>Kleinanzeigen.de</b> (Beta): genauso, ein Link zu einer Suchseite auf kleinanzeigen.de.
+<b>Kleinanzeigen.de</b>
+Öffne eine Suche auf kleinanzeigen.de, setz die Filter (Ort, Umkreis, Preis) und schick die Adresse der Seite. Ich prüfe alle 10 Minuten, schneller als alle 5 geht nicht: sonst blockiert die Seite.
 
 ⚠️ Es muss ein Link zu einer <b>Suchseite</b> sein (Liste von Anzeigen), nicht zu einer einzelnen Anzeige.`,
   helpFilter: `🧹 <b>So funktioniert der Filter</b>
@@ -267,7 +269,7 @@ Dein Tarif und Verbrauch: /plan`,
   inviteText: (link, days, count) =>
     `🎁 <b>Freund einladen</b>\n\nWenn ein Freund den Bot über deinen Link startet, bekommt ihr beide <b>${days} Tage Pro</b>.\n\n${link}${count ? `\n\nBisher über deinen Link: ${count}` : ""}`,
   btnShare: "📤 Teilen",
-  shareText: "Dieser Bot schickt nur die Willhaben-Anzeigen, die du suchst, und sagt dir, ob sie unter dem Marktpreis liegen",
+  shareText: "Dieser Bot schickt nur die Willhaben- und Kleinanzeigen-Anzeigen, die du suchst, und sagt dir, ob sie unter dem Marktpreis liegen",
   refWelcome: (days) => `🎁 Ein Freund hat dich eingeladen: Du bekommst ${days} Tage Pro geschenkt.`,
   refRewarded: (days) => `🎉 Über deinen Link ist ein Freund dazugekommen: +${days} Tage Pro.`,
   planProUntil: (date) => `Pro bis ${date}`,

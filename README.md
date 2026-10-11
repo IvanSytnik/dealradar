@@ -1,54 +1,70 @@
 # DealRadar
 
-A Telegram bot that watches marketplace searches and sends only the listings worth opening.
-Paste a Willhaben search link (or just type `ps5 digital`). The bot works out what you are looking for, builds a filter, and notifies you about new and cheaper listings, without accessories, wanted ads or junk.
+[![CI](https://github.com/IvanSytnik/dealradar/actions/workflows/ci.yml/badge.svg)](https://github.com/IvanSytnik/dealradar/actions/workflows/ci.yml)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
+![Node](https://img.shields.io/badge/Node-22-339933)
+![AWS](https://img.shields.io/badge/AWS-EC2%20%C2%B7%20S3%20%C2%B7%20CloudFront-ff9900)
+
+A Telegram bot that watches **willhaben.at** 🇦🇹 and **kleinanzeigen.de** 🇩🇪 searches and sends only the listings worth opening, with a deal score based on what that exact model really sells for.
+
+Paste a search link (or just type `ps5 digital`). The bot works out what you are looking for, builds a filter, and notifies you about new and cheaper listings without accessories, wanted ads or junk. `/scan` reads every page of the search and shows the real market, model by model.
+
+**Try it:** [@dealradar_austria_bot](https://t.me/dealradar_austria_bot)
+
+<p>
+  <img src="docs/screenshots/watch-and-scan.jpg" width="260" alt="Watch card and market analysis in Telegram">
+  <img src="docs/screenshots/report-models.jpg" width="260" alt="Mini App report: per-model medians">
+  <img src="docs/screenshots/report-filters.jpg" width="260" alt="Mini App report: model and deal filters">
+</p>
+
+## Why it is not just another scraper
+
+- **Per-model market prices.** One median over "PS5" mixes a 500 € Digital with a 1250 € Pro, so every Pro looks overpriced and every standard console looks like a deal. The AI picks the item's price-relevant variants once per watch, tags each listing with one, and each variant with at least 5 priced listings gets its own median. A listing that does not name its model is compared with the cheapest variant (sellers always name the expensive one), so it never shows a fake discount. Live Stuttgart PS5 search, 483 listings: Standard 535 €, Digital 500 €, Slim 550 €, Pro 1250 €; overall 600 €.
+- **Real numbers, not a model's guess.** Deal scores come from the median and quartiles of the live market. The AI judges relevance, condition, bundle and scam signals, never the price.
+- **Rules first, AI second.** A German marketplace lexicon and per-watch rules drop most junk for free; only what passes costs an AI call, in batches of 20 with a cache and a daily budget per user.
+- **Polite by design.** One request per unique URL per cycle however many users watch it, a per-host queue, backoff with jitter, and a per-site floor (Kleinanzeigen: 10 min default, never under 5).
 
 ## Features
 
-- **Four languages:** German, English, Ukrainian, Russian. Picked from the Telegram app language, changeable with `/lang` (the choice then sticks). The AI writes its item description, reasons and notes in the same language; the HTML report and the command menu are localised too. Locales are type-checked against the reference, and a test renders every string to check that its Telegram HTML is balanced.
-- **Onboarding in one tap.** `/start` explains the bot in two lines and offers example searches (PS5, iPhone 13, E-Bike) that create a watch immediately; `/help` is split into topics, including how to copy a search link from the Willhaben app.
-- **Kleinanzeigen.de (beta).** Second adapter for Germany: `/s-<category>/<keyword>/k0c<id>` search URLs, `seite:N` pagination (both verified against the live site), `article.aditem` parsing with fallbacks and explicit "blocked" vs "layout changed" errors. Users are told it is in beta; the parser-health alert covers the rest. `npm run probe -- "<url>"` checks any adapter against the live site.
-- **Link in, watch out.** The bot accepts any Willhaben search URL (keyword, category, region, price) or plain text. It canonicalises the URL to newest first and strips tracking params.
-- **Auto filter profile.** The AI reads the query and returns match groups (`series s | xbox s | xss`), exclusions (other models, cases, games), accessory words (fine in a bundle, not alone) and a sane price range. All of it is plain words, never regexes, and validated with zod. Without AI there is a deterministic fallback.
-- **Three filter layers:** marketplace-wide German lexicon (wanted ads, swaps, empty boxes, defects), then the per-watch rules, then the AI verdict (relevant, condition, bundle, deal score 1–10). Rule-rejected listings never cost an AI call.
-- **Learns from feedback.** 👎/👍 under each notification are fed back to the AI as few-shot examples for that watch.
-- **Several watches per user**, each with its own interval, price range, stop words, AI toggle, defect policy and score threshold. The card shows only what matters (item, price, real market median, status) with four buttons; filter internals and toggles sit one tap deeper in ⚙️ Settings, text commands cover fine-tuning.
-- **Instant preview.** On creation the bot shows how many current listings pass and why others were dropped, so a bad filter is visible in seconds. It then memorises everything already online, so only genuinely new listings are sent.
-- **Price-drop alerts** with the old price struck through.
-- **Market analysis (`/scan`).** Reads every page of a search (5 on Free, 20 on Pro), filters with rules, screens the rest with the AI in batches of 20, computes the real median and quartiles, and scores each listing against them. Highlights deals, lists cheap broken units separately for repair/resale, flags suspiciously cheap ones. Sends a summary with the full sortable report from all pages as a **Telegram Mini App** (opens inside Telegram, takes the Telegram theme from the launch hash, opens listings via `web_app_open_link`), a browser link as fallback (S3 + CloudFront, 30 days) and the file as a copy. The median is stored and used in live notifications ("18 % below the median").
-- **Per-model medians.** One median over "PS5" mixes a 500 € Digital with a 1250 € Pro. The AI picks the item's price-relevant variants once per watch (standard / digital / slim / pro), tags every listing with one, and each variant with at least 5 priced listings gets its own median. A listing is scored against its own model; the report has a per-model table and a model filter, live notifications say "20 % below the Pro median".
-- **Plans and limits** (Free / Pro): number of watches, minimum interval, AI calls per day. Admin `/grant`.
+**Watching**
+- **Two marketplaces:** Willhaben (any search URL: keyword, category, region, price) and Kleinanzeigen (`/s-<category>/<keyword>/k0c<id>`, `seite:N` pagination, parser built from the live Tailwind markup and the cards' JSON-LD). Plain text searches Willhaben across Austria. URLs are canonicalised to newest first, tracking params stripped.
+- **Auto filter profile.** The AI reads the query and returns match groups (`series s | xbox s | xss`), exclusions (other models, cases, games), accessory words (fine in a bundle, not alone), a sane price floor and the item's variants. All plain words, never regexes, validated with zod; a deterministic fallback runs without AI.
+- **Three filter layers:** marketplace-wide lexicon (wanted ads, swaps, empty boxes, repair services, defects), per-watch rules, then the AI verdict (relevant, condition, bundle, model, score 1–10).
+- **Instant preview** on creation: how many current listings pass and why the others were dropped. Everything already online is memorised, so only genuinely new listings are sent, plus price drops with the old price struck through.
+- **Learns from feedback:** 👎/👍 under each notification become few-shot examples for that watch.
+
+**Market analysis (`/scan`)**
+- Reads every page (5 on Free, 20 on Pro), filters, screens the rest with the AI, computes overall and per-model medians, scores each listing against its own model. Highlights deals, lists cheap broken units separately for repair or resale, flags suspiciously cheap ones.
+- The full report opens as a **Telegram Mini App** (Telegram theme from the launch hash, listings open via `web_app_open_link`), with a per-model table, model and deal-tag filters and sorting; a browser link (S3 + CloudFront, 30 days) and the HTML file as fallbacks.
+- The medians are stored on the watch: live notifications say "20 % below the Pro median".
+
+**Product**
+- **Four languages** (de, en, uk, ru), picked from the Telegram app language or `/lang`. The AI writes its descriptions and notes in the same language. Locales are type-checked against the reference; tests check that every string's Telegram HTML is balanced and button labels fit.
+- **Onboarding in one tap:** `/start` explains the bot and offers example searches that create a watch immediately; `/help` is split into topics, including how to copy a search link.
+- **Plans** (Free / Pro): watches, minimum interval, AI calls and scans per day. **Invites:** `/invite` gives a personal link; a new user and the inviter each get 7 days of Pro.
 - **Privacy and erasure:** `/privacy` says what is stored, where (AWS Stockholm) and what goes to the AI; `/delete_me` erases the user and everything keyed by them in one transaction (GDPR Art. 17).
-- **Invites:** `/invite` gives a personal `?start=ref_<id>` link; a brand-new user who joins through it and the inviter each get 7 days of Pro (stacking, time-limited, self-invites and repeat joins ignored).
-- **Parser health alert:** every fetch outcome feeds a rolling window per site; when most recent fetches across several different searches are empty or failing (layout change, IP block), the owner gets one Telegram alert, repeated at most every 6 hours, plus a "recovered" message.
-- **Analytics** (`/stats`): signups, active users, notifications, AI calls, negative feedback.
-- **Operational safety.** One HTTP request per unique URL per cycle, however many users watch it. A per-host queue with a minimum gap between requests. Exponential backoff with jitter on errors, and the user is alerted once after 5 consecutive failures. Users who block the bot are deactivated automatically. Notifications are capped per run with a summary line.
+- **Parser health alert:** fetch outcomes feed a rolling window per site; when most recent fetches across several searches are empty or failing (layout change, IP block), the owner gets one Telegram alert, at most every 6 hours, and a "recovered" message.
+- **Analytics** (`/stats`): signups, active users, notifications, AI calls, negative feedback, referrals.
 
 ## Architecture
 
 ```
 src/
-  sites/        SiteAdapter interface + willhaben adapter, polite per-host HTTP queue
-  core/         normalisation, marketplace lexicon, rule filter, plans
-  ai/           LLM port, profile builder, listing classifier (cache + daily budget)
+  sites/        SiteAdapter interface, willhaben + kleinanzeigen adapters, polite per-host HTTP queue
+  core/         normalisation, marketplace lexicon, rule filter, market stats, variants, plans
+  ai/           LLM port, profile builder, per-listing and batch classifiers (cache + daily budget)
   db/           SQLite migrations (user_version) + repository
-  services/     WatchService (create/preview/edit), Poller (scheduler), Notifier port
+  services/     WatchService, ScanService, Poller (scheduler), HealthMonitor, Notifier port
+  report/       HTML report / Mini App, S3 publisher
   bot/          grammY handlers, pure command parsers, message formatting
   i18n/         de / en / uk / ru dictionaries (ru is the reference type)
-tests/          vitest: unit, service, scheduler with fake clock, bot end-to-end
+tests/          vitest: unit, service, scheduler with fake clock, bot end-to-end, real-page fixtures
+infra/          Terraform: EC2, ECR, SSM, S3 + CloudFront, IAM, budgets
 ```
 
-The core does not depend on Telegram or Anthropic. Both sit behind ports (`Notifier`, `Llm`), which is why the scheduler and the bot are tested end-to-end without network access.
+The core does not depend on Telegram or Anthropic. Both sit behind ports (`Notifier`, `Llm`), so the scheduler and the bot are tested end-to-end without network access. 262 tests, `tsc --strict`, CI on every push.
 
-**Adding a marketplace:** implement `SiteAdapter` (`matches`, `parseSearchUrl`, `searchUrlFromText`, `parseListings`), register it in `sites/index.ts`, and add a fixture test. The lexicon is German; a non-German site needs its own lexicon (see roadmap).
-
-## Check a site adapter against the live site
-
-```bash
-npm run probe -- "https://www.kleinanzeigen.de/s-konsolen/ps5/k0c279" 2
-# on the server (Session Manager shell): sudo docker exec dealradar npx tsx src/tools/probe.ts "<url>"
-```
-Prints the canonical URL, listings per page, the first few parsed listings and how many miss a price, place, image or text. Exit code 1 when nothing parsed.
+**Adding a marketplace:** implement `SiteAdapter` (`matches`, `parseSearchUrl`, `searchUrlFromText`, `pageUrl`, `parseListings`, optional `minIntervalSec`), register it in `sites/index.ts`, add a fixture test from a real page, and check it with the probe below. The lexicon is German; a non-German site needs its own.
 
 ## Run locally
 
@@ -59,65 +75,58 @@ npm run check             # typecheck + tests
 npm start
 ```
 
+Check an adapter against the live site:
+```bash
+npm run probe -- "https://www.kleinanzeigen.de/s-konsolen/ps5/k0c279" 2
+```
+Prints the canonical URL, listings per page, the first parsed listings and how many miss a price, place, image or text. Exit code 1 when nothing parsed.
+
 ## Deploy
 
-The bot uses Telegram long polling: it needs no public URL or open port, only an always-on process and a small persistent disk for SQLite. **Run exactly one instance** (stop the local one first), otherwise Telegram answers `409 Conflict`.
+Telegram long polling: no public URL or open port, only an always-on process and a small persistent disk for SQLite. **Run exactly one instance**, otherwise Telegram answers `409 Conflict`.
 
-### AWS (Terraform + GitHub Actions)
-EC2 Graviton + Docker, ECR, GitHub Actions deploys through SSM Run Command (OIDC, or a scoped IAM user where an SCP blocks OIDC), secrets in SSM Parameter Store, CloudWatch Logs, budget alerts, no inbound ports. See [docs/aws.md](docs/aws.md) for the architecture, decisions, cost (~$12/month) and setup.
+**AWS (production):** Terraform provisions EC2 Graviton (t4g.micro) with Docker, ECR, SSM Parameter Store for secrets, CloudWatch Logs, an S3 + CloudFront bucket for reports and budget alerts; no inbound ports. GitHub Actions builds the arm64 image and deploys through SSM Run Command (OIDC, or a scoped IAM user where an SCP blocks OIDC). Architecture, decisions, cost (~$12/month) and setup: [docs/aws.md](docs/aws.md).
 
-### Railway (simplest, deploys on every push)
-1. railway.com → New Project → Deploy from GitHub repo → pick this repo. It builds the `Dockerfile` (see `railway.json`).
-2. Service → Variables: `TELEGRAM_BOT_TOKEN`, `ANTHROPIC_API_KEY`, `ADMIN_IDS`, `AI_MODEL`, and `RAILWAY_RUN_UID=0` (the volume is root-owned; the image runs as `node` otherwise).
-3. Service → Volumes → Add volume, mount path `/app/data`. Without it the database is wiped on every deploy.
-4. Deploy, then check the logs for `"msg":"started"`.
-
-The Hobby plan includes $5 of usage a month; this bot needs roughly 100–200 MB RAM and little CPU.
-
-### Any VPS (Hetzner, Netcup, Oracle Free Tier, a Raspberry Pi at home)
+**Any VPS or a home server:**
 ```bash
-git clone <repo> dealradar && cd dealradar
+git clone https://github.com/IvanSytnik/dealradar && cd dealradar
 cp .env.example .env && nano .env
 docker compose up -d --build
-docker compose logs -f
 ```
-Update: `git pull && docker compose up -d --build`. Data lives in `./data`.
+Railway works too (`railway.json`; mount a volume at `/app/data` and set `RAILWAY_RUN_UID=0`).
 
-**Note on IPs:** marketplaces may rate-limit or block data-center IP ranges. If fetches start failing with 403/429 on a cloud host, a home server (residential IP) is the fallback. The bot backs off automatically and alerts the user after 5 failures.
+Marketplaces may rate-limit data-center IPs. The bot backs off automatically, alerts the user after 5 failures and the owner when a whole site fails; a residential IP is the fallback.
 
 ## Bot commands
 
 | | |
 |---|---|
 | link or text | new watch |
-| `/list` | watches, with buttons: pause, preview, AI, defects, interval, delete |
+| `/list` | watches, with buttons: pause, market analysis, settings, preview |
+| `/scan 3` | market analysis of all pages |
 | `/price 3 80 220` | price range (`-` = no bound) |
 | `/exclude 3 hülle, spiel` / `/unexclude 3 controller` | stop words |
 | `/match 3 series s \| xbox s` | what the title must contain |
 | `/score 3 6` | AI score threshold |
 | `/rename 3 Name` | |
-| `/scan 3` | market analysis of all pages (also the 📊 button in the watch card) |
-| `/plan` | plan and usage |
-| `/lang` | language |
-| `/invite` | personal invite link (+7 days Pro each) |
-| `/privacy`, `/delete_me` | what is stored; erase everything |
-| `/stats`, `/grant <id> pro` | admin |
+| `/plan` · `/invite` · `/lang` | plan and usage · invite link · language |
+| `/privacy` · `/delete_me` | what is stored · erase everything |
+| `/stats` · `/grant <id> pro` | admin |
 
 Deep link `t.me/<bot>?start=<base64url keyword>` creates a watch straight from a landing page.
 
 ## Known limitations
 
-- **Willhaben parsing relies on the `__NEXT_DATA__` structure** (`props.pageProps.searchResult.advertSummaryList.advertSummary`). Verified live on 2026-10-10, including `page=` pagination (20 pages, 600 listings). If Willhaben changes its frontend, `src/sites/willhaben.ts` is the only file to fix; the test fixture is synthetic.
+- **Parsers follow the sites' current markup:** Willhaben's `__NEXT_DATA__` (`searchResult.advertSummaryList`) and Kleinanzeigen's `article[data-adid]` cards, both verified live in October 2026 with real-page fixtures. A change breaks one file and triggers the health alert.
 - Exclusions match word prefixes (`huelle` hits `Hüllen`), not compound suffixes (`Schutzhülle`). The AI layer covers that; a German decompounder would be better.
-- Pending free-text confirmations live in memory and are lost on restart (harmless: the user gets "request expired").
-- Scraping is subject to the marketplace's terms. Keep request rates low and do not resell the data.
+- Variant medians need enough listings: a model with fewer than 5 priced listings falls back to the overall median.
+- Scraping is subject to the marketplaces' terms. Request rates stay low and the data is not resold.
 
-## Roadmap to a product
+## Roadmap
 
-1. **Payments:** Telegram Stars (`sendInvoice`, currency `XTR`) for Pro, monthly subscription, `pre_checkout_query` handler, plan expiry column.
-2. **More sites:** take Kleinanzeigen out of beta, then eBay, Vinted; per-site lexicons; one watch across several sites.
-3. **Price intelligence:** keep listing history per query to show "15% below the median for the last 30 days", which gives a better deal score than the model's guess.
-4. **Speed as a paid feature:** Pro checks every minute; later, priority queue and proxy pool.
-5. **Scale:** move from SQLite to Postgres and run the poller as separate workers with a job queue once there are more than ~2k active watches; Telegram webhook instead of long polling.
+1. **Payments:** Telegram Stars (`XTR`) for Pro, monthly subscription.
+2. **Price history:** listing history per query for "15 % below the 30-day median" and price trends per model.
+3. **More sites:** eBay, Vinted; one watch across several sites.
+4. **Finds as tags:** low firmware, warranty, sealed box, already noticed by the AI, surfaced as filters.
+5. **Scale:** Postgres and separate poller workers past ~2k active watches; webhooks instead of long polling.
 6. **Observability:** Sentry, uptime ping, CloudWatch alarm on the error log pattern.
-7. **Growth:** shareable watches, landing page with deep links.

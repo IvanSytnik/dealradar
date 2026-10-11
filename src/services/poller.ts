@@ -117,7 +117,9 @@ export class Poller {
   private nextRun(w: Watch, failures: number) {
     const backoff = Math.min(2 ** failures, 32);
     const jitter = 1 + Math.random() * 0.15;
-    return this.now() + w.intervalSec * 1000 * backoff * jitter;
+    // the site floor also holds for watches stored before it existed
+    const base = Math.max(w.intervalSec, siteById(w.query.site).minIntervalSec ?? 0);
+    return this.now() + base * 1000 * backoff * jitter;
   }
 
   private async fail(w: Watch, message: string) {

@@ -586,8 +586,11 @@ export function createBot(deps: {
     await ctx.answerCallbackQuery();
     const { user, T } = who(ctx);
     const id = Number(ctx.match[1]);
+    const w = repo.getUserWatch(user.id, id);
+    // intervals below the site's politeness floor are not offered at all, whatever the plan
+    const floor = w ? (siteById(w.query.site).minIntervalSec ?? 0) : 0;
     const kb = new InlineKeyboard();
-    for (const s of INTERVAL_CHOICES) {
+    for (const s of INTERVAL_CHOICES.filter((x) => x >= floor)) {
       const locked = s < PLANS[user.plan].minIntervalSec;
       kb.text(`${locked ? "🔒 " : ""}${intervalLabel(T, s)}`, cb("ints", id, s));
     }

@@ -4,7 +4,7 @@ import type { Listing, SearchQuery } from "../types.js";
 import type { SiteAdapter } from "./types.js";
 
 /**
- * Kleinanzeigen.de (Germany), BETA.
+ * Kleinanzeigen.de (Germany).
  *
  * Verified against the live site on 2026-10-11: search URLs look like /s-konsolen/ps5/k0c279, page 2
  * is /s-konsolen/seite:2/ps5/k0c279 (the "seite:N" segment goes right before the keyword), 25 results
@@ -117,7 +117,10 @@ function listingFrom(el: HTMLElement): Listing | null {
 export const kleinanzeigen: SiteAdapter = {
   id: "kleinanzeigen",
   name: "Kleinanzeigen",
-  beta: true,
+  // out of beta 2026-10-11: live from AWS, 20-page scans and per-model medians checked on a real search.
+  // A slower pace than Willhaben: one IP polling every minute is what bot protection looks for.
+  minIntervalSec: 300,
+  defaultIntervalSec: 600,
 
   matches: (url) => /(^|\.)(ebay-)?kleinanzeigen\.de$/.test(url.hostname),
 

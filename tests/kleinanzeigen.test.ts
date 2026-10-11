@@ -12,7 +12,8 @@ describe("Kleinanzeigen URLs (shapes verified on the live site, 2026-10-11)", ()
   it("is picked for kleinanzeigen.de links, old ebay-kleinanzeigen.de too", () => {
     expect(adapterForUrl(u("https://www.kleinanzeigen.de/s-ps5/k0"))?.id).toBe("kleinanzeigen");
     expect(adapterForUrl(u("https://www.ebay-kleinanzeigen.de/s-ps5/k0"))?.id).toBe("kleinanzeigen");
-    expect(ka.beta).toBe(true);
+    expect(ka.beta).toBeFalsy();
+    expect(ka).toMatchObject({ minIntervalSec: 300, defaultIntervalSec: 600 });
   });
 
   it("reads keyword, category and price, and drops the page", () => {

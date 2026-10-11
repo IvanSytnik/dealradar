@@ -19,6 +19,27 @@ describe("migrations", () => {
   });
 });
 
+describe("migration v5", () => {
+  it("moves Kleinanzeigen watches under 5 min to 10 min, leaves the rest", () => {
+    const path = join(mkdtempSync(join(tmpdir(), "dr-")), "db.sqlite");
+    const db = openDb(path);
+    const repo = new Repo(db);
+    seedUser(repo, 1, "pro");
+    const ka = { site: "kleinanzeigen", url: "https://www.kleinanzeigen.de/s-ps5/k0", keyword: "ps5", categoryHint: null, priceFrom: null, priceTo: null };
+    const fast = repo.createWatch({ userId: 1, name: "ka", query: ka, profile: XBOX_PROFILE, intervalSec: 60 });
+    const slow = repo.createWatch({ userId: 1, name: "ka2", query: { ...ka, url: ka.url + "?x" }, profile: XBOX_PROFILE, intervalSec: 1800 });
+    const wh = seedWatch(repo, 1);
+    repo.updateWatch(wh.id, { intervalSec: 60 });
+    db.pragma("user_version = 4");
+    db.close();
+
+    const again = new Repo(openDb(path));
+    expect(again.getWatch(fast.id)!.intervalSec).toBe(600);
+    expect(again.getWatch(slow.id)!.intervalSec).toBe(1800);
+    expect(again.getWatch(wh.id)!.intervalSec).toBe(60);
+  });
+});
+
 describe("Repo", () => {
   it("upsert keeps plan and un-blocks a returning user", () => {
     const repo = memRepo();
