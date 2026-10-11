@@ -109,6 +109,11 @@ describe("Kleinanzeigen live markup (real page, 2026-10-11)", () => {
     expect(list.filter((l) => l.price !== null).length).toBeGreaterThanOrEqual(24); // "VB" alone has no number
   });
 
+  it("a full real page counts as full, so page 2 is fetched (live: 23-24 after dropping wanted ads)", () => {
+    expect(list.length).toBeGreaterThanOrEqual(ka.pageSize);
+    expect(list.length - 3).toBeGreaterThanOrEqual(ka.pageSize); // a few more wanted/duplicate ads still count as full
+  });
+
   it("cards that cannot be read fail loudly instead of returning nothing", () => {
     const broken = html.replace(/<h3[\s\S]*?<\/h3>/g, "").replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g, "");
     expect(() => ka.parseListings(broken)).toThrow(/could not read any/);

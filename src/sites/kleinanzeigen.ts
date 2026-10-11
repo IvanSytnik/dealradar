@@ -144,7 +144,12 @@ export const kleinanzeigen: SiteAdapter = {
     return q;
   },
 
-  pageSize: 25,
+  /**
+   * The site shows 25 per page, but wanted ads and repeated promoted ads are dropped while parsing,
+   * so a full page parses to 23-26 (live, 2026-10-11). The scheduler treats "fewer than pageSize"
+   * as the last page, so this is the threshold for "full", not the nominal size.
+   */
+  pageSize: 20,
 
   /** "seite:N" goes right before the keyword (or before the code when there is no keyword) */
   pageUrl(url, page) {
