@@ -1,3 +1,4 @@
+import { AI_LANGUAGE, type Lang } from "../i18n/index.js";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Repo } from "../db/repo.js";
@@ -33,14 +34,15 @@ One entry per listing, same "i" as given.
 - condition: "defect" only if the MAIN item is broken or sold for parts. A worn or faulty accessory (e.g. a controller with stick drift) does not make the item defect.
 - bundle: extras BEYOND what comes standard in the box (e.g. "2. Controller", "3 Spiele", "Ladestation"). Never list the standard controller, cables, original box (OVP) or receipt.
 - suspicious: scam signals only (prepayment only, shipping from abroad only, copied stock text, absurd promises). NOT for a low price alone.
-- note: one short phrase in Russian about what makes this listing notable, or why it is not relevant.
+- note: one short phrase, in the language named in the request, about what makes this listing notable, or why it is not relevant.
 Do not judge the price.`;
 
 /** Bump when the prompt changes meaning, so cached verdicts from the old prompt are not reused. */
 export const BATCH_PROMPT_VERSION = 2;
 
-export function batchKey(watch: Watch, l: Listing): string {
-  return `b${BATCH_PROMPT_VERSION}:` + createHash("sha1").update(`${watch.profile.item}|${l.id}|${l.price}|${l.title}`).digest("hex");
+export function batchKey(watch: Watch, l: Listing, lang: Lang = "en"): string {
+  // the note is shown to the user, so its language is part of the key
+  return `b${BATCH_PROMPT_VERSION}:` + createHash("sha1").update(`${watch.profile.item}|${l.id}|${l.price}|${l.title}|${lang}`).digest("hex");
 }
 
 export interface BatchResult {
@@ -65,6 +67,7 @@ export class BatchClassifier {
     listings: Listing[],
     dailyLimit: number,
     onProgress?: (done: number, total: number) => void,
+    lang: Lang = "en",
   ): Promise<BatchResult> {
     const verdicts = new Map<string, BatchVerdict>();
     const result: BatchResult = { verdicts, calls: 0, skippedForBudget: 0, failedBatches: 0 };
@@ -72,7 +75,7 @@ export class BatchClassifier {
 
     const todo: Listing[] = [];
     for (const l of listings) {
-      const cached = this.repo.getVerdict(batchKey(watch, l)) as unknown as BatchVerdict | null;
+      const cached = this.repo.getVerdict(batchKey(watch, l, lang)) as unknown as BatchVerdict | null;
       if (cached) verdicts.set(l.id, cached);
       else todo.push(l);
     }
@@ -92,10 +95,10 @@ export class BatchClassifier {
         result.calls++;
         this.repo.track(watch.userId, "ai_call", { batch: batch.length });
         try {
-          const parsed = await this.runBatch(watch, batch);
+          const parsed = await this.runBatch(watch, batch, lang);
           for (const [id, v] of parsed) {
             verdicts.set(id, v);
-            this.repo.putVerdict(batchKey(watch, batch.find((l) => l.id === id)!), v as never);
+            this.repo.putVerdict(batchKey(watch, batch.find((l) => l.id === id)!, lang), v as never);
           }
         } catch {
           result.failedBatches++;
@@ -108,7 +111,7 @@ export class BatchClassifier {
     return result;
   }
 
-  private async runBatch(watch: Watch, batch: Listing[]): Promise<Map<string, BatchVerdict>> {
+  private async runBatch(watch: Watch, batch: Listing[], lang: Lang): Promise<Map<string, BatchVerdict>> {
     const lines = batch.map(
       (l, i) =>
         `[${i}] ${l.title} | ${l.price ?? "?"} EUR | ${l.body.replace(/\s+/g, " ").slice(0, 300) || "-"}`,
@@ -116,6 +119,7 @@ export class BatchClassifier {
     const user = [
       `Buyer wants: ${watch.profile.item}`,
       watch.profile.allowDefect ? "Broken units are acceptable to this buyer." : "Broken units are NOT acceptable.",
+      `Write every "note" in ${AI_LANGUAGE[lang]}.`,
       "",
       ...lines,
     ].join("\n");

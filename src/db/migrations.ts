@@ -83,4 +83,9 @@ export const MIGRATIONS: string[] = [
     PRIMARY KEY (user_id, day)
   );
   `,
+  // v3: interface language. lang_set = the user picked it in /lang, so Telegram's locale no longer overrides it
+  `
+  ALTER TABLE users ADD COLUMN lang TEXT NOT NULL DEFAULT 'en';
+  ALTER TABLE users ADD COLUMN lang_set INTEGER NOT NULL DEFAULT 0;
+  `,
 ];

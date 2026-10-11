@@ -1,3 +1,4 @@
+import type { Dict } from "../i18n/index.js";
 // Market statistics and deal scoring. Pure functions: the numbers come from real listings, not from a model's guess.
 
 export interface MarketStats {
@@ -88,17 +89,8 @@ export function scoreDeal(x: ScoreInput, m: MarketStats | null): DealScore {
   return { score: Math.max(1, Math.min(10, Math.round(s))), tags, delta };
 }
 
-export const TAG_LABEL: Record<DealTag, string> = {
-  very_cheap: "🔥 сильно дешевле рынка",
-  cheap: "💸 дешевле рынка",
-  bundle: "📦 богатый комплект",
-  defect: "🔧 дефект / на запчасти",
-  suspicious: "⚠️ подозрительно дёшево",
-  no_price: "❔ без цены",
-  expensive: "📈 дороже рынка",
-};
-
-export function pct(delta: number): string {
+/** "18% below median" in the user's language. Labels for tags live in the locale (Dict.tag). */
+export function pct(delta: number, t: Dict): string {
   const v = Math.round(delta * 100);
-  return v === 0 ? "по медиане" : v < 0 ? `на ${-v}% дешевле медианы` : `на ${v}% дороже медианы`;
+  return v === 0 ? t.pctAt : v < 0 ? t.pctBelow(-v) : t.pctAbove(v);
 }

@@ -193,7 +193,7 @@ describe("HTML report", () => {
     // the report itself must refuse non-http links, whatever the adapter produced
     r.report.items[0]!.listing.url = "javascript:alert(1)";
     r.report.items[0]!.listing.image = "javascript:alert(2)";
-    const html = renderReport(r.report);
+    const html = renderReport(r.report, "ru");
     expect(html.startsWith("<!doctype html>")).toBe(true);
     expect(html).not.toContain("<script>alert(1)</script>");
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
@@ -205,6 +205,11 @@ describe("HTML report", () => {
     expect(html).toMatch(/\.chips\{display:none/);
     expect(html).toContain('class="nojs"');
     expect(html).toContain("documentElement.className+=' js'");
+    // the same report for a German user carries no Russian
+    const de = renderReport(r.report, "de");
+    expect(de).toContain('<html lang="de">');
+    expect(de).toContain("Median");
+    expect(de.replace(/<td>.*?<\/td>/gs, "")).not.toMatch(/[А-Яа-яЁё]/);
   });
 });
 

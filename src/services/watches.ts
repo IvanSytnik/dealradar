@@ -18,7 +18,8 @@ export interface Preview {
   passed: { listing: Listing; rule: RuleResult }[];
   dropped: { listing: Listing; rule: RuleResult }[];
   /** Passed the rules, rejected by the AI */
-  aiDropped: { listing: Listing; reason: string }[];
+  /** reason: the AI's note in the user's language, may be empty; defect: dropped only for being broken */
+  aiDropped: { listing: Listing; reason: string; defect: boolean }[];
   aiChecked: number;
 }
 
@@ -71,7 +72,7 @@ export class WatchService {
       return { ok: false, error: "fetch_failed", detail: (e as Error).message };
     }
 
-    const { profile, source } = await buildProfile(query, this.llm);
+    const { profile, source } = await buildProfile(query, this.llm, user.lang);
     const watch = this.repo.createWatch({
       userId: user.id,
       name: query.keyword.slice(0, 40),
@@ -108,13 +109,13 @@ export class WatchService {
     if (!this.classifier?.enabled || !watch.profile.useAi || preview.passed.length === 0) return preview;
     const p = watch.profile;
     const head = preview.passed.slice(0, PREVIEW_AI_MAX);
-    const r = await this.classifier.classify(watch, head.map((x) => x.listing), PLANS[user.plan].aiPerDay);
+    const r = await this.classifier.classify(watch, head.map((x) => x.listing), PLANS[user.plan].aiPerDay, undefined, user.lang);
     const kept: Preview["passed"] = [];
     const aiDropped: Preview["aiDropped"] = [];
     for (const item of preview.passed) {
       const v = r.verdicts.get(item.listing.id);
-      if (v && !v.relevant) aiDropped.push({ listing: item.listing, reason: v.note || "не тот товар" });
-      else if (v && v.condition === "defect" && !p.allowDefect) aiDropped.push({ listing: item.listing, reason: "дефект" });
+      if (v && !v.relevant) aiDropped.push({ listing: item.listing, reason: v.note, defect: false });
+      else if (v && v.condition === "defect" && !p.allowDefect) aiDropped.push({ listing: item.listing, reason: "", defect: true });
       else kept.push(item);
     }
     return { ...preview, passed: kept, aiDropped, aiChecked: r.verdicts.size };

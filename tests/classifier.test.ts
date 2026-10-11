@@ -29,6 +29,16 @@ describe("Classifier", () => {
     expect(cacheKey(watch, l)).not.toBe(cacheKey(watch, { ...l, price: 150 }));
   });
 
+  it("asks for the reason in the user's language and caches per language", async () => {
+    const { clf, watch, calls } = setup();
+    const l = listing({ id: "1", title: "Xbox Series S" });
+    await clf.classify(watch, l, 10, "de");
+    expect(calls[0]!.user).toContain('Write "reason" in German.');
+    await clf.classify(watch, l, 10, "uk"); // same listing, other language: new call
+    expect(calls[1]!.user).toContain("Ukrainian");
+    expect(calls).toHaveLength(2);
+  });
+
   it("puts the buyer's feedback into the prompt", async () => {
     const { clf, watch, calls, repo } = setup();
     repo.addFeedback(watch.id, "9", "Xbox Series S nur Controller", 40, false);

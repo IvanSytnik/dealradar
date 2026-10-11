@@ -1,3 +1,4 @@
+import { AI_LANGUAGE, type Lang } from "../i18n/index.js";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Repo } from "../db/repo.js";
@@ -18,15 +19,16 @@ Return ONLY JSON: {"relevant": bool, "condition": "new|good|defect|unknown", "bu
 - condition: "defect" if broken or for parts.
 - bundle: notable extras included, short.
 - score: how good the deal is for this buyer, using typical Austrian used prices. Clear scam signals (prepayment only, shipping only from abroad, copied text) -> 1-2.
-- reason: one short phrase in Russian.`;
+- reason: one short phrase in the language named at the end of the request.`;
 
 export type ClassifyResult =
   | { kind: "verdict"; verdict: AiVerdict; cached: boolean }
   | { kind: "skipped"; why: "no_ai" | "budget" | "error" };
 
-export function cacheKey(watch: Watch, l: Listing): string {
-  // Price and the watch's target are part of the key: a price drop or a re-tuned profile is re-judged
-  return createHash("sha1").update(`${watch.id}|${watch.profile.item}|${watch.market?.median ?? ""}|${l.id}|${l.price}`).digest("hex");
+export function cacheKey(watch: Watch, l: Listing, lang: Lang = "en"): string {
+  // Price and the watch's target are part of the key: a price drop or a re-tuned profile is re-judged.
+  // The language too: the reason text is shown to the user.
+  return createHash("sha1").update(`${watch.id}|${watch.profile.item}|${watch.market?.median ?? ""}|${l.id}|${l.price}|${lang}`).digest("hex");
 }
 
 export class Classifier {
@@ -39,10 +41,10 @@ export class Classifier {
     return this.llm !== null;
   }
 
-  async classify(watch: Watch, listing: Listing, dailyLimit: number): Promise<ClassifyResult> {
+  async classify(watch: Watch, listing: Listing, dailyLimit: number, lang: Lang = "en"): Promise<ClassifyResult> {
     if (!this.llm) return { kind: "skipped", why: "no_ai" };
 
-    const key = cacheKey(watch, listing);
+    const key = cacheKey(watch, listing, lang);
     const cached = this.repo.getVerdict(key);
     if (cached) return { kind: "verdict", verdict: cached, cached: true };
 
@@ -68,6 +70,8 @@ export class Classifier {
       `Price: ${listing.price ?? "not given"} EUR`,
       `Location: ${listing.location || "-"}`,
       `Description: ${listing.body.slice(0, 1500) || "-"}`,
+      "",
+      `Write "reason" in ${AI_LANGUAGE[lang]}.`,
     ]
       .filter((x) => x !== "")
       .join("\n");

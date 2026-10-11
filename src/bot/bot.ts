@@ -2,6 +2,7 @@ import { Bot, GrammyError, InlineKeyboard, InputFile, type Context } from "gramm
 import type { AppConfig } from "../config.js";
 import { INTERVAL_CHOICES, PLANS } from "../core/plans.js";
 import type { Repo } from "../db/repo.js";
+import { detectLang, isLang, LANG_LABELS, LANGS, t, type Dict, type Lang } from "../i18n/index.js";
 import { logger } from "../logger.js";
 import { extractUrl } from "../sites/index.js";
 import { RecipientGoneError, type Notifier } from "../services/notifier.js";
@@ -22,53 +23,68 @@ import {
   type HelpTopic,
   intervalLabel,
   listingText,
+  planPitch,
   planText,
   previewText,
   profileSummary,
   scanSummaryText,
-  WELCOME,
 } from "./format.js";
 
 const HTML = { parse_mode: "HTML" as const, link_preview_options: { is_disabled: true } };
 
 /** Main card: the four things people actually do. Everything else is one tap deeper, in settings. */
-function watchKeyboard(w: Watch) {
+function watchKeyboard(T: Dict, w: Watch) {
   return new InlineKeyboard()
-    .text(w.active ? "⏸ Пауза" : "▶️ Включить", cb("tgl", w.id, "active"))
-    .text("📊 Анализ рынка", cb("scan", w.id))
+    .text(w.active ? T.btnPause : T.btnResume, cb("tgl", w.id, "active"))
+    .text(T.btnScan, cb("scan", w.id))
     .row()
-    .text("⚙️ Настройки", cb("set", w.id))
-    .text("🧪 Превью", cb("prv", w.id))
+    .text(T.btnSettings, cb("set", w.id))
+    .text(T.btnPreview, cb("prv", w.id))
     .row()
-    .text("« Все отслеживания", cb("lst"));
+    .text(T.btnAllWatches, cb("lst"));
 }
 
-function settingsKeyboard(w: Watch) {
+function settingsKeyboard(T: Dict, w: Watch) {
   return new InlineKeyboard()
-    .text(w.profile.useAi ? "🤖 ИИ: вкл" : "🤖 ИИ: выкл", cb("tgl", w.id, "ai"))
-    .text(w.profile.allowDefect ? "⚠️ Дефекты: да" : "⚠️ Дефекты: нет", cb("tgl", w.id, "defect"))
+    .text(T.btnAi(w.profile.useAi), cb("tgl", w.id, "ai"))
+    .text(T.btnDefects(w.profile.allowDefect), cb("tgl", w.id, "defect"))
     .row()
-    .text(`⏱ ${intervalLabel(w.intervalSec)}`, cb("int", w.id))
-    .text("✏️ Слова и цена", cb("edt", w.id))
+    .text(`⏱ ${intervalLabel(T, w.intervalSec)}`, cb("int", w.id))
+    .text(T.btnWords, cb("edt", w.id))
     .row()
-    .text("🗑 Удалить", cb("del", w.id))
-    .text("« Назад", cb("opn", w.id));
+    .text(T.btnDelete, cb("del", w.id))
+    .text(T.btnBack, cb("opn", w.id));
 }
 
-function helpKeyboard(current: HelpTopic) {
+function helpKeyboard(T: Dict, current: HelpTopic) {
   const kb = new InlineKeyboard();
-  HELP_TOPICS.forEach((t, i) => {
-    kb.text(t.id === current ? `• ${t.label}` : t.label, cb("hlp", t.id));
+  HELP_TOPICS.forEach((id, i) => {
+    kb.text(id === current ? `• ${T.helpLabels[id]}` : T.helpLabels[id], cb("hlp", id));
     if (i % 2 === 1) kb.row();
   });
   return kb;
 }
 
-function welcomeKeyboard() {
+/** The language button names the current language, so a wrong guess is obvious and one tap away. */
+function welcomeKeyboard(T: Dict, lang: Lang) {
   const kb = new InlineKeyboard();
   EXAMPLE_LABELS.forEach((label, i) => kb.text(label, cb("ex", i)));
   // ":n" = answer with a new message, so the example buttons stay on screen
-  return kb.row().text("🔗 Как взять ссылку", cb("hlp", "link", "n")).text("🤖 Что умеет", cb("hlp", "about", "n"));
+  return kb
+    .row()
+    .text(T.btnHowLink, cb("hlp", "link", "n"))
+    .text(T.btnWhatCan, cb("hlp", "about", "n"))
+    .row()
+    .text(`🌐 ${LANG_LABELS[lang]}`, cb("lngm"));
+}
+
+function langKeyboard() {
+  const kb = new InlineKeyboard();
+  LANGS.forEach((l, i) => {
+    kb.text(LANG_LABELS[l], cb("lng", l));
+    if (i % 2 === 1) kb.row();
+  });
+  return kb;
 }
 
 export function createTelegramNotifier(bot: Bot): Notifier {
@@ -85,12 +101,13 @@ export function createTelegramNotifier(bot: Bot): Notifier {
 
   return {
     async sendListing(user, watch, listing, info) {
-      const text = listingText(watch, listing, info);
+      const T = t(user.lang);
+      const text = listingText(T, watch, listing, info);
       const kb = new InlineKeyboard()
-        .url("Открыть", listing.url)
+        .url(T.btnOpen, listing.url)
         .row()
-        .text("👎 Не то", cb("fb", 0, watch.id, listing.id))
-        .text("👍 Годно", cb("fb", 1, watch.id, listing.id));
+        .text(T.btnNotIt, cb("fb", 0, watch.id, listing.id))
+        .text(T.btnGood, cb("fb", 1, watch.id, listing.id));
       await wrap(async () => {
         if (listing.image) {
           try {
@@ -127,7 +144,13 @@ export function createBot(deps: {
 
   const userOf = (ctx: Context): User => {
     const from = ctx.from!;
-    const u = repo.upsertUser(from.id, ctx.chat?.id ?? from.id, from.username ?? null, config.EVERYONE_PRO ? "pro" : "free");
+    const u = repo.upsertUser(
+      from.id,
+      ctx.chat?.id ?? from.id,
+      from.username ?? null,
+      config.EVERYONE_PRO ? "pro" : "free",
+      detectLang(from.language_code),
+    );
     // the owner should never hit the Free limits while testing
     if (isAdmin(u.id) && u.plan !== "pro") {
       repo.setPlan(u.id, "pro");
@@ -135,71 +158,73 @@ export function createBot(deps: {
     }
     return u;
   };
+  /** The user and their dictionary: almost every handler needs both. */
+  const who = (ctx: Context) => {
+    const user = userOf(ctx);
+    return { user, T: t(user.lang) };
+  };
 
   const reply = (ctx: Context, text: string, kb?: InlineKeyboard) => ctx.reply(text, { ...HTML, reply_markup: kb });
 
-  async function showWatch(ctx: Context, w: Watch, edit = false) {
-    const text = profileSummary(w);
+  async function showWatch(ctx: Context, T: Dict, w: Watch, edit = false) {
+    const text = profileSummary(T, w);
     if (edit) {
-      await ctx.editMessageText(text, { ...HTML, reply_markup: watchKeyboard(w) }).catch(() => undefined);
+      await ctx.editMessageText(text, { ...HTML, reply_markup: watchKeyboard(T, w) }).catch(() => undefined);
     } else {
-      await reply(ctx, text, watchKeyboard(w));
+      await reply(ctx, text, watchKeyboard(T, w));
     }
   }
 
-  async function showSettings(ctx: Context, w: Watch, edit = true) {
-    const opts = { ...HTML, reply_markup: settingsKeyboard(w) };
-    if (edit) await ctx.editMessageText(filterDetails(w), opts).catch(() => undefined);
-    else await ctx.reply(filterDetails(w), opts);
+  async function showSettings(ctx: Context, T: Dict, w: Watch) {
+    await ctx.editMessageText(filterDetails(T, w), { ...HTML, reply_markup: settingsKeyboard(T, w) }).catch(() => undefined);
   }
 
   async function showList(ctx: Context, user: User, edit = false) {
+    const T = t(user.lang);
     const list = repo.listWatches(user.id);
     if (!list.length) {
-      const t = "Отслеживаний пока нет. Пришли ссылку на поиск Willhaben или напиши, что ищешь. Или попробуй пример:";
-      return edit
-        ? ctx.editMessageText(t, { ...HTML, reply_markup: welcomeKeyboard() }).catch(() => undefined)
-        : reply(ctx, t, welcomeKeyboard());
+      const opts = { ...HTML, reply_markup: welcomeKeyboard(T, user.lang) };
+      return edit ? ctx.editMessageText(T.noWatches, opts).catch(() => undefined) : ctx.reply(T.noWatches, opts);
     }
     const kb = new InlineKeyboard();
     for (const w of list) kb.text(`${w.active ? "🟢" : "⏸"} #${w.id} ${w.name}`, cb("opn", w.id)).row();
-    const t = `<b>Твои отслеживания</b> (${list.length}/${PLANS[user.plan].maxWatches})`;
-    return edit ? ctx.editMessageText(t, { ...HTML, reply_markup: kb }).catch(() => undefined) : reply(ctx, t, kb);
+    const text = T.listTitle(list.length, PLANS[user.plan].maxWatches);
+    return edit ? ctx.editMessageText(text, { ...HTML, reply_markup: kb }).catch(() => undefined) : reply(ctx, text, kb);
   }
 
   async function createWatch(ctx: Context, user: User, input: string) {
+    const T = t(user.lang);
     await ctx.replyWithChatAction("typing");
-    const status = await reply(ctx, "🔎 Смотрю поиск и настраиваю фильтр…");
+    const status = await reply(ctx, T.creating);
     const r = await watches.create(user, input);
     await ctx.api.deleteMessage(status.chat.id, status.message_id).catch(() => undefined);
 
     if (!r.ok) {
+      const detail = r.detail ? `(${esc(r.detail)})` : "";
       const msg = {
-        limit: `Лимит тарифа: ${PLANS[user.plan].maxWatches} отслеживаний. Удали лишнее в /list или перейди на Pro (/plan).`,
-        unsupported_site: `Пока поддерживаю только Willhaben. ${r.detail ? `(${esc(r.detail)})` : ""}`,
-        bad_url: `Это не похоже на страницу поиска. Открой поиск, а не одно объявление, и пришли ссылку. ${r.detail ? `(${esc(r.detail)})` : ""}`,
-        fetch_failed: `Не удалось загрузить поиск, попробуй позже. (${esc(r.detail ?? "")})`,
-        duplicate: "Такой поиск уже отслеживается, смотри /list.",
+        limit: T.errLimit(PLANS[user.plan].maxWatches),
+        unsupported_site: T.errUnsupported(detail),
+        bad_url: T.errBadUrl(detail),
+        fetch_failed: T.errFetch(esc(r.detail ?? "")),
+        duplicate: T.errDuplicate,
       }[r.error];
       return reply(ctx, msg);
     }
 
-    const head =
-      r.profileSource === "ai"
-        ? "✅ Готово. ИИ разобрал, что ты ищешь, и собрал фильтр:"
-        : `✅ Готово. Фильтр по словам запроса${aiEnabled ? " (ИИ не ответил, проверь правила)" : ""}:`;
-    await reply(ctx, `${head}\n\n${profileSummary(r.watch)}`, watchKeyboard(r.watch));
-    await reply(ctx, `${previewText(r.preview)}\n\nТекущие объявления запомнил. Пришлю только новые и подешевевшие.`);
+    const head = r.profileSource === "ai" ? T.createdAi : T.createdFallback(aiEnabled);
+    await reply(ctx, `${head}\n\n${profileSummary(T, r.watch)}`, watchKeyboard(T, r.watch));
+    await reply(ctx, `${previewText(T, r.preview)}\n\n${T.seededNote}`);
   }
 
   // A scan takes up to a minute; one at a time per user
   const scanning = new Set<number>();
 
   async function runScan(ctx: Context, user: User, w: Watch) {
-    if (!scans) return reply(ctx, "Анализ рынка не настроен на сервере.");
-    if (scanning.has(user.id)) return reply(ctx, "Анализ уже идёт, подожди немного.");
+    const T = t(user.lang);
+    if (!scans) return reply(ctx, T.scanNotConfigured);
+    if (scanning.has(user.id)) return reply(ctx, T.scanBusy);
     scanning.add(user.id);
-    const status = await reply(ctx, `📊 Анализирую «${esc(w.name)}»…`);
+    const status = await reply(ctx, T.scanStarting(esc(w.name)));
     let last = 0;
     const progress = (p: ScanProgress) => {
       const now = Date.now();
@@ -207,36 +232,27 @@ export function createBot(deps: {
       last = now;
       const text =
         p.stage === "pages"
-          ? `📊 Загружаю страницы: ${p.page}, объявлений ${p.listings}…`
+          ? T.scanProgressPages(p.page, p.listings)
           : p.stage === "ai"
-            ? `🤖 ИИ проверяет: ${p.done}/${p.total}…`
-            : "📊 Готовлю отчёт…";
+            ? T.scanProgressAi(p.done, p.total)
+            : T.scanProgressReport;
       void ctx.api.editMessageText(status.chat.id, status.message_id, text).catch(() => undefined);
     };
     try {
       const r = await scans.run(user, w, progress);
       if (!r.ok) {
-        const msg =
-          r.error === "limit"
-            ? `Лимит анализов на сегодня: ${PLANS[user.plan].scansPerDay}. На Pro больше, см. /plan.`
-            : `Не удалось загрузить поиск: ${esc(r.detail ?? "")}`;
+        const msg = r.error === "limit" ? T.scanLimit(PLANS[user.plan].scansPerDay) : T.scanFetchFailed(esc(r.detail ?? ""));
         await ctx.api.editMessageText(status.chat.id, status.message_id, msg, HTML).catch(() => reply(ctx, msg));
         return;
       }
       await ctx.api.deleteMessage(status.chat.id, status.message_id).catch(() => undefined);
-      const html = renderReport(r.report);
+      const html = renderReport(r.report, user.lang);
       const url = reports ? await reports.publish(html) : null;
-      await reply(
-        ctx,
-        scanSummaryText(r.report, { link: Boolean(url) }),
-        url ? new InlineKeyboard().url("🌐 Открыть полный отчёт", url) : undefined,
-      );
+      await reply(ctx, scanSummaryText(T, r.report, { link: Boolean(url) }), url ? new InlineKeyboard().url(T.btnOpenReport, url) : undefined);
       const day = new Date(r.report.at).toISOString().slice(0, 10);
       const file = `dealradar-${w.name.replace(/[^\p{L}\p{N}]+/gu, "-").toLowerCase()}-${day}.html`;
       await ctx.replyWithDocument(new InputFile(Buffer.from(html, "utf8"), file), {
-        caption: url
-          ? `Копия отчёта файлом. Ссылка выше работает ${REPORT_TTL_DAYS} дней, сортировка и фильтры там.`
-          : "Полный отчёт. Сортировка и фильтры работают, если открыть файл в браузере (в просмотре Telegram на телефоне нет).",
+        caption: url ? T.fileCaptionLink(REPORT_TTL_DAYS) : T.fileCaptionNoLink,
       });
     } finally {
       scanning.delete(user.id);
@@ -251,7 +267,7 @@ export function createBot(deps: {
   function startScan(ctx: Context, user: User, w: Watch) {
     const p = runScan(ctx, user, w).catch((e) => {
       logger.error("scan failed", { watch: w.id, err: (e as Error).message });
-      return reply(ctx, "Анализ упал с ошибкой, попробуй позже.").catch(() => undefined);
+      return reply(ctx, t(user.lang).scanCrashed).catch(() => undefined);
     });
     pendingScans.add(p);
     void p.finally(() => pendingScans.delete(p));
@@ -264,8 +280,8 @@ export function createBot(deps: {
 
   bot.command("start", async (ctx) => {
     const isNew = !repo.getUser(ctx.from!.id);
-    const user = userOf(ctx);
-    if (isNew) repo.track(user.id, "signup", { ref: ctx.match || null });
+    const { user, T } = who(ctx);
+    if (isNew) repo.track(user.id, "signup", { ref: ctx.match || null, lang: user.lang });
     // Deep link: t.me/bot?start=<base64url keyword> lets a landing page pre-fill a search
     if (ctx.match) {
       try {
@@ -275,37 +291,43 @@ export function createBot(deps: {
         /* ignore */
       }
     }
-    await reply(ctx, WELCOME, welcomeKeyboard());
+    await reply(ctx, T.welcome, welcomeKeyboard(T, user.lang));
   });
 
-  bot.command("help", (ctx) => reply(ctx, helpText("about"), helpKeyboard("about")));
+  bot.command("help", (ctx) => {
+    const { T } = who(ctx);
+    return reply(ctx, helpText(T, "about"), helpKeyboard(T, "about"));
+  });
+
+  bot.command("lang", (ctx) => {
+    const { T } = who(ctx);
+    return reply(ctx, T.langPrompt, langKeyboard());
+  });
 
   bot.command("scan", async (ctx) => {
-    const user = userOf(ctx);
+    const { user, T } = who(ctx);
     const list = repo.listWatches(user.id);
     const id = parseId(ctx.match.trim()) ?? (list.length === 1 ? list[0]!.id : null);
     const w = id ? repo.getUserWatch(user.id, id) : null;
-    if (!w) return reply(ctx, "Укажи номер отслеживания: <code>/scan 3</code>. Номера в /list.");
+    if (!w) return reply(ctx, T.scanUsage);
     startScan(ctx, user, w);
   });
+
   bot.command("list", (ctx) => showList(ctx, userOf(ctx)));
 
   bot.command("plan", (ctx) => {
-    const user = userOf(ctx);
-    const extra =
-      user.plan === "free"
-        ? `\n\n<b>Pro</b>: до ${PLANS.pro.maxWatches} отслеживаний, проверка раз в ${intervalLabel(PLANS.pro.minIntervalSec)}, ${PLANS.pro.aiPerDay} ИИ-проверок в день.`
-        : "";
-    return reply(ctx, planText(user, repo.countWatches(user.id), repo.aiCallsToday(user.id)) + extra);
+    const { user, T } = who(ctx);
+    const extra = user.plan === "free" ? `\n\n${planPitch(T)}` : "";
+    return reply(ctx, planText(T, user, repo.countWatches(user.id), repo.aiCallsToday(user.id)) + extra);
   });
 
   const editCmd = (name: string, run: (user: User, args: string) => Watch | null, usage: string) =>
     bot.command(name, async (ctx) => {
-      const user = userOf(ctx);
+      const { user, T } = who(ctx);
       const w = run(user, ctx.match);
-      if (!w) return reply(ctx, `Не понял. Пример: <code>${usage}</code>`);
+      if (!w) return reply(ctx, T.badCommand(usage));
       repo.track(user.id, `edit_${name}`);
-      return showWatch(ctx, w);
+      return showWatch(ctx, T, w);
     });
 
   editCmd(
@@ -355,10 +377,10 @@ export function createBot(deps: {
       const p = parseIdAndRest(a);
       return p ? watches.rename(u, p.id, p.rest) : null;
     },
-    "/rename 3 Моя Xbox",
+    "/rename 3 My Xbox",
   );
 
-  // ---------------- admin ----------------
+  // ---------------- admin (owner-only, Russian on purpose) ----------------
 
   bot.command("stats", (ctx) => {
     if (!isAdmin(ctx.from!.id)) return;
@@ -389,66 +411,80 @@ export function createBot(deps: {
 
   bot.on("message:text", async (ctx) => {
     const text = ctx.message.text;
-    if (text.startsWith("/")) return reply(ctx, "Неизвестная команда. Помощь: /help");
-    const user = userOf(ctx);
+    const { user, T } = who(ctx);
+    if (text.startsWith("/")) return reply(ctx, T.unknownCommand);
 
     if (extractUrl(text)) return createWatch(ctx, user, text);
 
     const kw = text.trim();
     if (kw.length < 2 || kw.length > 80) {
-      return reply(
-        ctx,
-        "Пришли ссылку на поиск или коротко напиши, что ищешь.",
-        new InlineKeyboard().text("🔗 Как взять ссылку", cb("hlp", "link", "n")),
-      );
+      return reply(ctx, T.sendLinkOrText, new InlineKeyboard().text(T.btnHowLink, cb("hlp", "link", "n")));
     }
     pendingText.set(user.id, kw);
-    return reply(
-      ctx,
-      `Следить за «<b>${esc(kw)}</b>» на Willhaben по всей Австрии?\n<i>Для региона, категории и цены лучше прислать ссылку на поиск с нужными фильтрами.</i>`,
-      new InlineKeyboard().text("✅ Да", cb("kw")).text("Отмена", cb("kwx")),
-    );
+    return reply(ctx, T.confirmKeyword(esc(kw)), new InlineKeyboard().text(T.btnYes, cb("kw")).text(T.btnCancel, cb("kwx")));
   });
 
   // ---------------- buttons ----------------
 
   bot.callbackQuery("kw", async (ctx) => {
     await ctx.answerCallbackQuery();
-    const user = userOf(ctx);
+    const { user, T } = who(ctx);
     const kw = pendingText.get(user.id);
     pendingText.delete(user.id);
     await ctx.editMessageReplyMarkup().catch(() => undefined);
-    if (!kw) return reply(ctx, "Запрос устарел, напиши ещё раз.");
+    if (!kw) return reply(ctx, T.requestExpired);
     return createWatch(ctx, user, kw);
   });
 
   bot.callbackQuery("kwx", async (ctx) => {
-    pendingText.delete(ctx.from.id);
-    await ctx.answerCallbackQuery("Отменено");
+    const { user, T } = who(ctx);
+    pendingText.delete(user.id);
+    await ctx.answerCallbackQuery(T.cancelled);
     await ctx.deleteMessage().catch(() => undefined);
   });
 
   bot.callbackQuery(/^ex:(\d)$/, async (ctx) => {
     const kw = EXAMPLES[Number(ctx.match[1])];
     if (!kw) return ctx.answerCallbackQuery();
-    await ctx.answerCallbackQuery(`Создаю «${kw}»…`);
-    const user = userOf(ctx);
+    const { user, T } = who(ctx);
+    await ctx.answerCallbackQuery(T.creatingExample(kw));
     repo.track(user.id, "example", { kw });
     return createWatch(ctx, user, kw);
   });
 
   bot.callbackQuery(/^hlp:(about|link|filter|scan|plan)(:n)?$/, async (ctx) => {
     await ctx.answerCallbackQuery();
+    const { T } = who(ctx);
     const topic = ctx.match[1] as HelpTopic;
-    const opts = { ...HTML, reply_markup: helpKeyboard(topic) };
-    if (ctx.match[2]) await ctx.reply(helpText(topic), opts);
-    else await ctx.editMessageText(helpText(topic), opts).catch(() => undefined);
+    const opts = { ...HTML, reply_markup: helpKeyboard(T, topic) };
+    if (ctx.match[2]) await ctx.reply(helpText(T, topic), opts);
+    else await ctx.editMessageText(helpText(T, topic), opts).catch(() => undefined);
+  });
+
+  bot.callbackQuery("lngm", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const { T } = who(ctx);
+    await reply(ctx, T.langPrompt, langKeyboard());
+  });
+
+  bot.callbackQuery(/^lng:([a-z]{2})$/, async (ctx) => {
+    const lang = ctx.match[1];
+    if (!isLang(lang)) return ctx.answerCallbackQuery();
+    const user = userOf(ctx);
+    repo.setLang(user.id, lang);
+    repo.track(user.id, "lang", { lang });
+    const T = t(lang);
+    await ctx.answerCallbackQuery(T.saved);
+    await ctx.editMessageText(T.langSet, HTML).catch(() => undefined);
+    // show the start screen again, now readable
+    await reply(ctx, T.welcome, welcomeKeyboard(T, lang));
   });
 
   bot.callbackQuery(/^set:(\d+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
-    const w = repo.getUserWatch(ctx.from.id, Number(ctx.match[1]));
-    if (w) await showSettings(ctx, w);
+    const { user, T } = who(ctx);
+    const w = repo.getUserWatch(user.id, Number(ctx.match[1]));
+    if (w) await showSettings(ctx, T, w);
   });
 
   bot.callbackQuery("lst", async (ctx) => {
@@ -458,113 +494,108 @@ export function createBot(deps: {
 
   bot.callbackQuery(/^opn:(\d+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
-    const w = repo.getUserWatch(ctx.from.id, Number(ctx.match[1]));
-    if (w) await showWatch(ctx, w, true);
+    const { user, T } = who(ctx);
+    const w = repo.getUserWatch(user.id, Number(ctx.match[1]));
+    if (w) await showWatch(ctx, T, w, true);
   });
 
   bot.callbackQuery(/^tgl:(\d+):(active|ai|defect)$/, async (ctx) => {
-    const user = userOf(ctx);
+    const { user, T } = who(ctx);
     const id = Number(ctx.match[1]);
     const what = ctx.match[2];
     const cur = repo.getUserWatch(user.id, id);
-    if (!cur) return ctx.answerCallbackQuery("Не найдено");
-    if (what === "ai" && !aiEnabled) return ctx.answerCallbackQuery({ text: "ИИ не настроен на сервере", show_alert: true });
+    if (!cur) return ctx.answerCallbackQuery(T.notFound);
+    if (what === "ai" && !aiEnabled) return ctx.answerCallbackQuery({ text: T.aiNotConfigured, show_alert: true });
     const w =
-      what === "active"
-        ? watches.setActive(user, id, !cur.active)
-        : watches.toggle(user, id, what === "ai" ? "useAi" : "allowDefect");
-    await ctx.answerCallbackQuery("Сохранено");
+      what === "active" ? watches.setActive(user, id, !cur.active) : watches.toggle(user, id, what === "ai" ? "useAi" : "allowDefect");
+    await ctx.answerCallbackQuery(T.saved);
     if (!w) return;
-    if (what === "active") await showWatch(ctx, w, true);
-    else await showSettings(ctx, w);
+    if (what === "active") await showWatch(ctx, T, w, true);
+    else await showSettings(ctx, T, w);
   });
 
   bot.callbackQuery(/^int:(\d+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
-    const user = userOf(ctx);
+    const { user, T } = who(ctx);
     const id = Number(ctx.match[1]);
     const kb = new InlineKeyboard();
     for (const s of INTERVAL_CHOICES) {
       const locked = s < PLANS[user.plan].minIntervalSec;
-      kb.text(`${locked ? "🔒 " : ""}${intervalLabel(s)}`, cb("ints", id, s));
+      kb.text(`${locked ? "🔒 " : ""}${intervalLabel(T, s)}`, cb("ints", id, s));
     }
-    kb.row().text("« Назад", cb("set", id));
+    kb.row().text(T.btnBack, cb("set", id));
     await ctx.editMessageReplyMarkup({ reply_markup: kb }).catch(() => undefined);
   });
 
   bot.callbackQuery(/^ints:(\d+):(\d+)$/, async (ctx) => {
-    const user = userOf(ctx);
+    const { user, T } = who(ctx);
     const sec = Number(ctx.match[2]);
-    if (sec < PLANS[user.plan].minIntervalSec) {
-      return ctx.answerCallbackQuery({ text: "Доступно на Pro, см. /plan", show_alert: true });
-    }
+    if (sec < PLANS[user.plan].minIntervalSec) return ctx.answerCallbackQuery({ text: T.proOnly, show_alert: true });
     const w = watches.setInterval(user, Number(ctx.match[1]), sec);
-    await ctx.answerCallbackQuery("Сохранено");
-    if (w) await showSettings(ctx, w);
+    await ctx.answerCallbackQuery(T.saved);
+    if (w) await showSettings(ctx, T, w);
   });
 
   bot.callbackQuery(/^edt:(\d+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
-    await reply(ctx, editHelp(Number(ctx.match[1])));
+    const { T } = who(ctx);
+    await reply(ctx, editHelp(T, Number(ctx.match[1])));
   });
 
   bot.callbackQuery(/^scan:(\d+)$/, async (ctx) => {
-    const user = userOf(ctx);
+    const { user, T } = who(ctx);
     const w = repo.getUserWatch(user.id, Number(ctx.match[1]));
-    if (!w) return ctx.answerCallbackQuery("Не найдено");
-    await ctx.answerCallbackQuery("Запускаю анализ…");
+    if (!w) return ctx.answerCallbackQuery(T.notFound);
+    await ctx.answerCallbackQuery(T.scanStartingToast);
     startScan(ctx, user, w);
   });
 
   bot.callbackQuery(/^prv:(\d+)$/, async (ctx) => {
-    const w = repo.getUserWatch(ctx.from.id, Number(ctx.match[1]));
-    if (!w) return ctx.answerCallbackQuery("Не найдено");
-    await ctx.answerCallbackQuery("Загружаю…");
+    const { user, T } = who(ctx);
+    const w = repo.getUserWatch(user.id, Number(ctx.match[1]));
+    if (!w) return ctx.answerCallbackQuery(T.notFound);
+    await ctx.answerCallbackQuery(T.loading);
     try {
-      await reply(ctx, `🧪 <b>${esc(w.name)}</b>\n${previewText(await watches.preview(userOf(ctx), w))}`);
+      await reply(ctx, `🧪 <b>${esc(w.name)}</b>\n${previewText(T, await watches.preview(user, w))}`);
     } catch (e) {
-      await reply(ctx, `Не удалось загрузить: ${esc((e as Error).message)}`);
+      await reply(ctx, T.loadFailed(esc((e as Error).message)));
     }
   });
 
   bot.callbackQuery(/^del:(\d+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
+    const { T } = who(ctx);
     const id = Number(ctx.match[1]);
     await ctx
       .editMessageReplyMarkup({
-        reply_markup: new InlineKeyboard().text("Да, удалить", cb("delok", id)).text("Отмена", cb("set", id)),
+        reply_markup: new InlineKeyboard().text(T.btnConfirmDelete, cb("delok", id)).text(T.btnCancel, cb("set", id)),
       })
       .catch(() => undefined);
   });
 
   bot.callbackQuery(/^delok:(\d+)$/, async (ctx) => {
-    const user = userOf(ctx);
+    const { user, T } = who(ctx);
     const ok = watches.delete(user, Number(ctx.match[1]));
-    await ctx.answerCallbackQuery(ok ? "Удалено" : "Не найдено");
+    await ctx.answerCallbackQuery(ok ? T.deleted : T.notFound);
     if (ok) repo.track(user.id, "watch_deleted");
     await showList(ctx, user, true);
   });
 
   bot.callbackQuery(/^fb:([01]):(\d+):(.+)$/, async (ctx) => {
+    const { user, T } = who(ctx);
     const good = ctx.match[1] === "1";
     const watchId = Number(ctx.match[2]);
     const listingId = ctx.match[3]!;
-    const w = repo.getUserWatch(ctx.from.id, watchId);
+    const w = repo.getUserWatch(user.id, watchId);
     const seen = w ? repo.getSeen(watchId, listingId) : null;
-    if (!w || !seen) return ctx.answerCallbackQuery("Отслеживание удалено");
+    if (!w || !seen) return ctx.answerCallbackQuery(T.watchGone);
     repo.addFeedback(watchId, listingId, seen.title, seen.price, good);
-    repo.track(ctx.from.id, good ? "feedback_good" : "feedback_bad", { watch: watchId });
-    await ctx.answerCallbackQuery(
-      good
-        ? "Спасибо, учту"
-        : w.profile.useAi
-          ? "Учту. Похожие будут отсеиваться"
-          : "Учту. Включи ИИ или добавь стоп-слово через /exclude",
-    );
+    repo.track(user.id, good ? "feedback_good" : "feedback_bad", { watch: watchId });
+    await ctx.answerCallbackQuery(good ? T.fbGood : w.profile.useAi ? T.fbBadAi : T.fbBadNoAi);
     // keep only the link button so the message does not get re-voted
     const url = (ctx.callbackQuery.message?.reply_markup?.inline_keyboard?.[0]?.[0] as { url?: string } | undefined)?.url;
     await ctx
-      .editMessageReplyMarkup({ reply_markup: url ? new InlineKeyboard().url(good ? "👍 Открыть" : "👎 Открыть", url) : undefined })
+      .editMessageReplyMarkup({ reply_markup: url ? new InlineKeyboard().url(good ? T.btnOpenGood : T.btnOpenBad, url) : undefined })
       .catch(() => undefined);
   });
 
@@ -573,11 +604,18 @@ export function createBot(deps: {
   return bot;
 }
 
+/** Command menu per Telegram app language; "en" is also the default for every other locale. */
 export async function registerCommands(bot: Bot) {
-  await bot.api.setMyCommands([
-    { command: "list", description: "Мои отслеживания" },
-    { command: "scan", description: "Анализ рынка по всем страницам" },
-    { command: "plan", description: "Тариф и лимиты" },
-    { command: "help", description: "Помощь" },
-  ]);
+  for (const lang of LANGS) {
+    const T = t(lang);
+    const commands = [
+      { command: "list", description: T.cmdList },
+      { command: "scan", description: T.cmdScan },
+      { command: "plan", description: T.cmdPlan },
+      { command: "lang", description: T.cmdLang },
+      { command: "help", description: T.cmdHelp },
+    ];
+    await bot.api.setMyCommands(commands, { language_code: lang });
+    if (lang === "en") await bot.api.setMyCommands(commands);
+  }
 }

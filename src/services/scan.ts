@@ -94,8 +94,12 @@ export class ScanService {
 
     const useAi = p.useAi && this.batch.enabled;
     const ai = useAi
-      ? await this.batch.classify(watch, passed.map((x) => x.listing), limits.aiPerDay, (done, total) =>
-          onProgress?.({ stage: "ai", done, total }),
+      ? await this.batch.classify(
+          watch,
+          passed.map((x) => x.listing),
+          limits.aiPerDay,
+          (done, total) => onProgress?.({ stage: "ai", done, total }),
+          user.lang,
         )
       : null;
 
@@ -103,8 +107,8 @@ export class ScanService {
     const kept: { listing: Listing; rule: RuleResult; verdict: BatchVerdict | null }[] = [];
     for (const x of passed) {
       const v = ai?.verdicts.get(x.listing.id) ?? null;
-      if (v && !v.relevant) aiDropped.push({ listing: x.listing, note: v.note || "не тот товар" });
-      else if (v && v.condition === "defect" && !p.allowDefect) aiDropped.push({ listing: x.listing, note: "дефект" });
+      if (v && !v.relevant) aiDropped.push({ listing: x.listing, note: v.note });
+      else if (v && v.condition === "defect" && !p.allowDefect) aiDropped.push({ listing: x.listing, note: "defect" });
       else kept.push({ ...x, verdict: v });
     }
 

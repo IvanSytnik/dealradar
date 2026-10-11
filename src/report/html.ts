@@ -1,4 +1,5 @@
-import { pct, RELIABLE_N, TAG_LABEL } from "../core/market.js";
+import { pct, RELIABLE_N } from "../core/market.js";
+import { t as dict, type Dict, type Lang } from "../i18n/index.js";
 import type { ScanReport, ScoredItem } from "../services/scan.js";
 
 const esc = (s: string) =>
@@ -9,11 +10,11 @@ const safeUrl = (u: string | null) => (u && /^https?:\/\//i.test(u) ? esc(u) : "
 
 const eur = (n: number | null) => (n === null ? "—" : `${n.toLocaleString("de-AT")} €`);
 
-function row(i: ScoredItem, rank: number): string {
+function row(t: Dict, i: ScoredItem, rank: number): string {
   const l = i.listing;
-  const tags = i.deal.tags.map((t) => `<span class="tag t-${t}">${esc(TAG_LABEL[t])}</span>`).join("");
+  const tags = i.deal.tags.map((x) => `<span class="tag t-${x}">${esc(t.tag[x])}</span>`).join("");
   const bundle = i.verdict?.bundle.length ? `<div class="sub">📦 ${esc(i.verdict.bundle.join(", "))}</div>` : "";
-  const note = i.verdict?.note ? `<div class="sub">${esc(i.verdict.note)}</div>` : i.verdict ? "" : `<div class="sub muted">ИИ не проверял</div>`;
+  const note = i.verdict?.note ? `<div class="sub">${esc(i.verdict.note)}</div>` : i.verdict ? "" : `<div class="sub muted">${esc(t.report.notChecked)}</div>`;
   const img = safeUrl(l.image);
   return `<tr data-score="${i.deal.score ?? -1}" data-price="${l.price ?? ""}" data-delta="${i.deal.delta ?? ""}" data-tags="${i.deal.tags.join(" ")}">
   <td class="num">${rank}</td>
@@ -26,29 +27,31 @@ function row(i: ScoredItem, rank: number): string {
 </tr>`;
 }
 
-export function renderReport(r: ScanReport): string {
+export function renderReport(r: ScanReport, lang: Lang): string {
+  const t = dict(lang);
+  const R = t.report;
   const s = r.stats;
   const when = new Date(r.at).toLocaleString("de-AT", { timeZone: "Europe/Vienna" });
-  const title = `Анализ рынка: ${r.watch.name}`;
+  const title = R.title(r.watch.name);
   const statCards = s
     ? [
-        ["Медиана", eur(s.median)],
-        ["Типичный диапазон", `${eur(s.p25)} – ${eur(s.p75)}`],
-        ["Мин / макс", `${eur(s.min)} / ${eur(s.max)}`],
-        ["Подходящих с ценой", String(s.n)],
+        [R.median, eur(s.median)],
+        [R.typical, `${eur(s.p25)} – ${eur(s.p75)}`],
+        [R.minMax, `${eur(s.min)} / ${eur(s.max)}`],
+        [R.withPrice, String(s.n)],
       ]
-    : [["Медиана", "мало данных"]];
+    : [[R.median, R.fewData]];
   const highlights = r.highlights.length
     ? r.highlights
         .map(
           (h) => `<li><a href="${safeUrl(h.listing.url)}" target="_blank" rel="noopener noreferrer">${esc(h.listing.title)}</a>
-          <b>${eur(h.listing.price)}</b> · ${h.deal.delta !== null ? esc(pct(h.deal.delta)) : ""} · оценка ${h.deal.score}/10</li>`,
+          <b>${eur(h.listing.price)}</b> · ${h.deal.delta !== null ? esc(pct(h.deal.delta, t)) : ""} · ${esc(R.score(h.deal.score ?? 0))}</li>`,
         )
         .join("")
-    : "<li class=\"muted\">Сейчас явно выгодных предложений нет.</li>";
+    : `<li class="muted">${esc(R.noHighlights)}</li>`;
 
   const flips = r.flips.length
-    ? `<h2>🔧 Дефектные дёшево</h2><p class="muted">Для ремонта или перепродажи. Оценка считается от цены дефектных (~40% медианы), а не рабочих.</p><ol class="hl">${r.flips
+    ? `<h2>${esc(R.flipsTitle)}</h2><p class="muted">${esc(R.flipsNote)}</p><ol class="hl">${r.flips
         .map(
           (f) => `<li><a href="${safeUrl(f.listing.url)}" target="_blank" rel="noopener noreferrer">${esc(f.listing.title)}</a>
           <b>${eur(f.listing.price)}</b>${f.verdict?.note ? ` · ${esc(f.verdict.note)}` : ""}</li>`,
@@ -59,7 +62,7 @@ export function renderReport(r: ScanReport): string {
   const tagsPresent = [...new Set(r.items.flatMap((i) => i.deal.tags))];
 
   return `<!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title>
 <style>
 :root{--bg:#fafaf9;--fg:#1c1917;--muted:#78716c;--card:#fff;--line:#e7e5e4;--acc:#0f766e;--hot:#b91c1c}
@@ -84,28 +87,27 @@ footer{margin-top:24px;font-size:13px;color:var(--muted)}
 @media (max-width:640px){table{min-width:0}th.pic,td.pic,th.loc,td.loc,th.dl,td.dl,th.pr,td.pr{display:none}.m-price{display:block;font-weight:600;margin-top:2px}th,td{padding:8px 6px}}
 </style></head><body><main>
 <h1>${esc(title)}</h1>
-<div class="muted">${esc(when)} · ${r.pages} стр. · ${r.total} объявлений · подходит ${r.items.length}${r.pageLimitHit ? " · достигнут лимит страниц" : ""}</div>
-${s && s.n < RELIABLE_N ? `<p class="muted">Всего ${s.n} объявлений с ценой: медиана приблизительная.</p>` : ""}
+<div class="muted">${esc(when)} · ${esc(R.meta(r.pages, r.total, r.items.length, r.pageLimitHit))}</div>
+${s && s.n < RELIABLE_N ? `<p class="muted">${esc(R.fewPrices(s.n))}</p>` : ""}
 <div class="cards">${statCards.map(([k, v]) => `<div class="card"><div class="k">${esc(k!)}</div><div class="v">${esc(v!)}</div></div>`).join("")}</div>
 
-<h2>🔥 Интересное</h2>
+<h2>${esc(R.highlights)}</h2>
 <ol class="hl">${highlights}</ol>
 ${flips}
 
-<h2>Все подходящие (${r.items.length})</h2>
-<p class="muted">Отсортировано по оценке сделки, лучшие сверху.</p>
-<div class="nojs">Сортировка и фильтры не работают во встроенном просмотре Telegram. Открой отчёт по кнопке «🌐 Открыть полный отчёт» в чате с ботом или в браузере.</div>
-<div class="chips" id="chips"><button class="chip" aria-pressed="true" data-tag="">Все</button>${tagsPresent
-    .map((t) => `<button class="chip" aria-pressed="false" data-tag="${t}">${esc(TAG_LABEL[t])}</button>`)
+<h2>${esc(R.all(r.items.length))}</h2>
+<p class="muted">${esc(R.sorted)}</p>
+<div class="nojs">${esc(R.noJs)}</div>
+<div class="chips" id="chips"><button class="chip" aria-pressed="true" data-tag="">${esc(R.chipAll)}</button>${tagsPresent
+    .map((x) => `<button class="chip" aria-pressed="false" data-tag="${x}">${esc(t.tag[x])}</button>`)
     .join("")}</div>
 <div class="wrap"><table id="t"><thead><tr>
-<th data-k="rank">#</th><th class="pic"></th><th>Объявление</th><th class="pr" data-k="price">Цена</th><th class="dl" data-k="delta">К медиане</th><th data-k="score">Оценка</th><th class="loc">Место</th>
+<th data-k="rank">#</th><th class="pic"></th><th>${esc(R.colListing)}</th><th class="pr" data-k="price">${esc(R.colPrice)}</th><th class="dl" data-k="delta">${esc(R.colDelta)}</th><th data-k="score">${esc(R.colScore)}</th><th class="loc">${esc(R.colPlace)}</th>
 </tr></thead><tbody>
-${r.items.map((i, n) => row(i, n + 1)).join("\n")}
+${r.items.map((i, n) => row(t, i, n + 1)).join("\n")}
 </tbody></table></div>
 
-<footer>Отсеяно правилами: ${r.ruleDropped.length}, ИИ: ${r.aiDropped.length}${r.aiUnchecked ? `, не проверено ИИ (лимит): ${r.aiUnchecked}` : ""}.
-Оценка: 5 = медианная цена, каждые 10% дешевле дают +1; комплект +1; дефектные сравниваются с ~40% медианы и получают не больше 7. «Подозрительно дёшево» = ниже 45% медианы или признаки мошенничества.</footer>
+<footer>${esc(R.footer(r.ruleDropped.length, r.aiDropped.length, r.aiUnchecked))}</footer>
 </main>
 <script>
 (function(){

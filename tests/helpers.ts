@@ -66,7 +66,7 @@ export function listing(p: Partial<Listing> & { id: string; title: string }): Li
 }
 
 export function seedUser(repo: Repo, id = 1, plan: User["plan"] = "free"): User {
-  const u = repo.upsertUser(id, id * 10, `u${id}`);
+  const u = repo.upsertUser(id, id * 10, `u${id}`, "free", "ru");
   if (plan !== "free") repo.setPlan(id, plan);
   return repo.getUser(id)!;
 }

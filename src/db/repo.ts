@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { isLang, type Lang } from "../i18n/index.js";
 import type { AiVerdict, FilterProfile, Plan, SearchQuery, User, Watch } from "../types.js";
 import { MIGRATIONS } from "./migrations.js";
 import type { MarketStats } from "../core/market.js";
@@ -48,6 +49,7 @@ function rowToUser(r: any): User {
     chatId: r.chat_id,
     username: r.username,
     plan: r.plan as Plan,
+    lang: isLang(r.lang) ? r.lang : "en",
     blocked: !!r.blocked,
     createdAt: r.created_at,
   };
@@ -60,14 +62,24 @@ export class Repo {
   ) {}
 
   // ---------- users ----------
-  upsertUser(id: number, chatId: number, username: string | null, defaultPlan: Plan = "free"): User {
+  /**
+   * `lang` is the language detected from Telegram on this update. It follows the user's Telegram
+   * locale until they pick one explicitly with /lang (lang_set = 1).
+   */
+  upsertUser(id: number, chatId: number, username: string | null, defaultPlan: Plan = "free", lang: Lang = "en"): User {
     this.db
       .prepare(
-        `INSERT INTO users (id, chat_id, username, plan, created_at) VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET chat_id = excluded.chat_id, username = excluded.username, blocked = 0`,
+        `INSERT INTO users (id, chat_id, username, plan, lang, created_at) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET chat_id = excluded.chat_id, username = excluded.username, blocked = 0,
+           lang = CASE WHEN users.lang_set = 1 THEN users.lang ELSE excluded.lang END`,
       )
-      .run(id, chatId, username, defaultPlan, this.now());
+      .run(id, chatId, username, defaultPlan, lang, this.now());
     return this.getUser(id)!;
+  }
+
+  /** Explicit choice from /lang: sticks even if the Telegram locale differs. */
+  setLang(id: number, lang: Lang) {
+    return this.db.prepare("UPDATE users SET lang = ?, lang_set = 1 WHERE id = ?").run(lang, id).changes > 0;
   }
 
   getUser(id: number): User | null {

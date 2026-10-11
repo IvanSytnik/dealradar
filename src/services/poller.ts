@@ -1,3 +1,5 @@
+import { t } from "../i18n/index.js";
+import { esc } from "../bot/format.js";
 import type { Classifier } from "../ai/classifier.js";
 import { applyRules } from "../core/filter.js";
 import { PLANS } from "../core/plans.js";
@@ -119,7 +121,7 @@ export class Poller {
     logger.warn("watch fetch failed", { watch: w.id, failures, message });
     if (failures === FAILURE_ALERT_AT) {
       const user = this.repo.getUser(w.userId);
-      if (user) await this.safeText(user, `⚠️ «${w.name}»: не удаётся загрузить поиск (${message}). Продолжаю пробовать реже.`);
+      if (user) await this.safeText(user, t(user.lang).fetchFailing(esc(w.name), esc(message)));
     }
   }
 
@@ -146,7 +148,7 @@ export class Poller {
 
         let verdict = null;
         if (w.profile.useAi) {
-          const r = await this.classifier.classify(w, listing, limits.aiPerDay);
+          const r = await this.classifier.classify(w, listing, limits.aiPerDay, user.lang);
           if (r.kind === "verdict") {
             verdict = r.verdict;
             if (!verdict.relevant || verdict.score < w.profile.minScore) continue;
@@ -164,7 +166,7 @@ export class Poller {
         sent++;
       }
       if (suppressed > 0) {
-        await this.notifier.sendText(user, `…и ещё ${suppressed} по «${w.name}». Открой поиск, чтобы посмотреть всё.`);
+        await this.notifier.sendText(user, t(user.lang).moreListings(suppressed, esc(w.name)));
       }
     } catch (e) {
       if (e instanceof RecipientGoneError) {

@@ -8,11 +8,12 @@ import { BatchClassifier } from "../src/ai/batch.js";
 import type { ReportPublisher } from "../src/report/publish.js";
 import { fakeHttp, memRepo, willhabenHtml } from "./helpers.js";
 
-const USER = { id: 42, is_bot: false, first_name: "Ivan", username: "ivan" };
+const USER = { id: 42, is_bot: false, first_name: "Ivan", username: "ivan", language_code: "ru" };
 const CHAT = { id: 42, type: "private" as const, first_name: "Ivan" };
 const LINK = "https://www.willhaben.at/iad/kaufen-und-verkaufen/marktplatz?keyword=xbox+series+s&areaId=6";
 
-function setup(opts: { admin?: boolean; reports?: ReportPublisher } = {}) {
+function setup(opts: { admin?: boolean; reports?: ReportPublisher; langCode?: string } = {}) {
+  const from = { ...USER, language_code: opts.langCode ?? USER.language_code };
   const repo = memRepo();
   const http = fakeHttp(() =>
     willhabenHtml([
@@ -48,7 +49,7 @@ function setup(opts: { admin?: boolean; reports?: ReportPublisher } = {}) {
     const entities = t.startsWith("/") ? [{ type: "bot_command" as const, offset: 0, length: t.split(" ")[0]!.length }] : undefined;
     return bot.handleUpdate({
       update_id: ++updateId,
-      message: { message_id: updateId, date: 0, chat: CHAT, from: USER, text: t, entities },
+      message: { message_id: updateId, date: 0, chat: CHAT, from, text: t, entities },
     } as Update);
   };
   const press = (data: string) =>
@@ -56,7 +57,7 @@ function setup(opts: { admin?: boolean; reports?: ReportPublisher } = {}) {
       update_id: ++updateId,
       callback_query: {
         id: String(updateId),
-        from: USER,
+        from,
         chat_instance: "x",
         data,
         message: { message_id: 1, date: 0, chat: CHAT, text: "card" },
@@ -86,6 +87,29 @@ describe("bot end-to-end", () => {
     expect(all).toMatch(/Готово/);
     expect(all).toMatch(/под фильтр подходит <b>3<\/b>/);
     expect(s.repo.listWatches(42)).toHaveLength(1);
+  });
+
+  it("speaks the user's Telegram language", async () => {
+    const s = setup({ langCode: "de-AT" });
+    await s.text("/start");
+    expect(s.texts()[0]).toMatch(/beobachtet willhaben\.at/);
+    expect(s.buttons().map((b) => b.text)).toContain("🌐 🇦🇹 Deutsch");
+    await s.text(LINK);
+    const all = s.texts().join("\n");
+    expect(all).toMatch(/Fertig/);
+    expect(all).toMatch(/passen zum Filter/);
+    expect(all).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it("/lang switches the language and it sticks over the Telegram locale", async () => {
+    const s = setup({ langCode: "de" });
+    await s.text("/lang");
+    expect(s.buttons().map((b) => b.callback_data)).toEqual(["lng:de", "lng:en", "lng:uk", "lng:ru"]);
+    await s.press("lng:uk");
+    expect(s.repo.getUser(42)!.lang).toBe("uk");
+    expect(s.texts().at(-1)).toMatch(/стежить за оголошеннями/); // welcome again, now in Ukrainian
+    await s.text("/help"); // Telegram still says "de"
+    expect(s.texts().at(-1)).toMatch(/Що вміє DealRadar/);
   });
 
   it("an example button creates a watch in one tap", async () => {

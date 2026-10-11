@@ -1,3 +1,4 @@
+import { AI_LANGUAGE, type Lang } from "../i18n/index.js";
 import { z } from "zod";
 import { DEFECT_WORDS, GAME_WORDS, GENERIC_ACCESSORIES } from "../core/lexicon.js";
 import { normalize, tokens } from "../core/normalize.js";
@@ -45,7 +46,7 @@ const aiProfileSchema = z.object({
 const SYSTEM = `You configure a listing filter for the Austrian marketplace Willhaben (German-language listings).
 Given the user's search, return ONLY a JSON object:
 {
- "item": "short English description of what the user most likely wants to buy",
+ "item": "short description of what the user most likely wants to buy, in the language named in the request",
  "must_any": [["word", "word"], ...],   // title must contain ALL words of AT LEAST ONE group. Cover common spellings and model aliases (e.g. [["series","s"],["xbox","s"],["xss"]]). Lowercase. Single words or short phrases.
  "exclude": ["..."],                      // German/English title words that mean it is NOT the item: other models of the same family, games, cases, covers, chargers, spare parts sold alone, empty boxes. Lowercase word stems are fine ("huelle" matches "huellen").
  "accessory_words": ["..."],               // accessories that are fine as part of a bundle but not alone (e.g. "controller" for a console). Lowercase.
@@ -80,11 +81,15 @@ export function fallbackProfile(q: SearchQuery): FilterProfile {
   };
 }
 
-export async function buildProfile(q: SearchQuery, llm: Llm | null): Promise<{ profile: FilterProfile; source: "ai" | "fallback" }> {
+export async function buildProfile(
+  q: SearchQuery,
+  llm: Llm | null,
+  lang: Lang = "en",
+): Promise<{ profile: FilterProfile; source: "ai" | "fallback" }> {
   const base = fallbackProfile(q);
   if (!llm) return { profile: base, source: "fallback" };
 
-  const prompt = `Search keyword: "${q.keyword}"\nCategory: ${q.categoryHint ?? "unknown"}\nPrice range in URL: ${q.priceFrom ?? "-"} to ${q.priceTo ?? "-"} EUR`;
+  const prompt = `Search keyword: "${q.keyword}"\nCategory: ${q.categoryHint ?? "unknown"}\nPrice range in URL: ${q.priceFrom ?? "-"} to ${q.priceTo ?? "-"} EUR\nWrite "item" in ${AI_LANGUAGE[lang]}. Every other field stays German/English as described.`;
   let reply = "";
   try {
     let p: z.infer<typeof aiProfileSchema> | null = null;

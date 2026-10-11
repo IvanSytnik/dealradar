@@ -1,3 +1,4 @@
+import type { Lang } from "./i18n/index.js";
 import type { MarketStats } from "./core/market.js";
 
 /** A listing normalised across all marketplaces. */
@@ -59,6 +60,8 @@ export interface User {
   chatId: number;
   username: string | null;
   plan: Plan;
+  /** Interface and AI-text language */
+  lang: Lang;
   createdAt: number;
   blocked: boolean;
 }

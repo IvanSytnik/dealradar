@@ -1,3 +1,4 @@
+import { t as dict } from "../src/i18n/index.js";
 import { describe, expect, it } from "vitest";
 import { marketStats, pct, quantile, scoreDeal } from "../src/core/market.js";
 
@@ -58,8 +59,8 @@ describe("scoreDeal", () => {
   });
 
   it("pct wording", () => {
-    expect(pct(-0.18)).toBe("на 18% дешевле медианы");
-    expect(pct(0.1)).toBe("на 10% дороже медианы");
-    expect(pct(0.001)).toBe("по медиане");
+    expect(pct(-0.18, dict("ru"))).toBe("на 18% дешевле медианы");
+    expect(pct(0.1, dict("ru"))).toBe("на 10% дороже медианы");
+    expect(pct(0.001, dict("ru"))).toBe("по медиане");
   });
 });
