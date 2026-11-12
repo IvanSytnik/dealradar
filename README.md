@@ -228,3 +228,5 @@ Please report vulnerabilities privately, not in public issues. See [SECURITY.md]
 ## License
 
 View-only, all rights reserved: see [LICENSE](LICENSE). You may read the code; using, copying, modifying, deploying or running it needs written permission from the author.
+
+Deployment and extension sections in this README are technical documentation for the author's setup and portfolio review, not a grant of license.
