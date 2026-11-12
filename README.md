@@ -130,3 +130,11 @@ Deep link `t.me/<bot>?start=<base64url keyword>` creates a watch straight from a
 4. **Finds as tags:** low firmware, warranty, sealed box, already noticed by the AI, surfaced as filters.
 5. **Scale:** Postgres and separate poller workers past ~2k active watches; webhooks instead of long polling.
 6. **Observability:** Sentry, uptime ping, CloudWatch alarm on the error log pattern.
+
+## Security
+
+Please report vulnerabilities privately, not in public issues. See [SECURITY.md](SECURITY.md).
+
+## License
+
+View-only, all rights reserved: see [LICENSE](LICENSE). You may read the code; using, copying, modifying, deploying or running it needs written permission from the author.
