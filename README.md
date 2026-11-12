@@ -153,6 +153,57 @@ Marketplaces may rate-limit data-center IPs. The bot backs off automatically, al
 
 Deep link `t.me/<bot>?start=<base64url keyword>` creates a watch straight from a landing page.
 
+### Example dialogue
+
+> **Illustrative values.** The layout below was rendered with the bot's real English templates (`src/bot/format.ts`, `src/i18n/en.ts`). Titles, places, prices, counts and the AI note are placeholders, not real listings or market data. In Telegram the messages use bold, links and inline buttons, shown here as `[…]`.
+
+```text
+You:  ps5
+
+Bot:  Watch “ps5” on Willhaben across Austria?
+      For a region, category or price, send a search link with those filters instead.
+      [✅ Yes] [Cancel]
+
+You:  [✅ Yes]
+
+Bot:  ✅ Done. The AI worked out what you're after and built the filter:
+
+      #1 ps5 🟢
+      🎯 ‹item the AI understood›
+      💶 Price: any
+      📊 Market: tap “Market analysis” to see real prices
+      ⏱ Every 5 min · 🤖 AI on
+      🔗 Open search
+      [⏸ Pause] [📊 Market analysis]
+      [⚙️ Settings] [🧪 Preview]
+      [« All watches]
+
+Bot:  30 listings on the site right now, 1 match the filter.
+      AI checked 1 of those that passed the rules.
+
+      ✅ Passed:
+      • ‹listing title A› · 450 €
+
+      🗑 Dropped by rules: 1 (accessory 1), e.g.:
+      • ‹listing title B› · accessory "controller"
+
+      I've remembered the current listings. You'll only get new ones and price drops.
+
+      … later, after a 📊 Market analysis has stored the medians:
+
+Bot:  🆕 ps5
+      ‹listing title›
+      💶 450 €
+      📍 ‹district›
+      📊 10% below median (Digital median 500 €)
+      📦 ‹extra›
+      ⭐ 7/10 · ‹AI note›
+      [Open]
+      [👎 Not it] [👍 Good one]
+```
+
+A price drop starts with `📉 Price dropped · ps5` and shows the old price struck through next to the new one.
+
 ## Known limitations
 
 - **Parsers follow the sites' current markup:** Willhaben's `__NEXT_DATA__` (`searchResult.advertSummaryList`) and Kleinanzeigen's `article[data-adid]` cards, both verified live in October 2026 with real-page fixtures. A change breaks one file and triggers the health alert.
