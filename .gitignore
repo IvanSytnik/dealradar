@@ -11,3 +11,6 @@ infra/terraform/*.tfstate
 infra/terraform/*.tfstate.*
 infra/terraform/terraform.tfvars
 infra/terraform/crash.log
+
+# macOS
+.DS_Store

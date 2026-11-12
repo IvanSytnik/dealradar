@@ -5,7 +5,7 @@ Infrastructure as code in [`infra/terraform`](../infra/terraform), continuous de
 
 ```mermaid
 flowchart LR
-  dev[git push main] --> ci[GitHub Actions: CI<br/>typecheck, 253 tests,<br/>terraform validate]
+  dev[git push main] --> ci[GitHub Actions: CI<br/>typecheck, vitest suite,<br/>terraform validate]
   ci -->|green| cd[Deploy workflow]
   cd -->|OIDC role or scoped IAM user| sts[(AWS STS)]
   cd -->|docker buildx arm64| ecr[(ECR)]
@@ -17,6 +17,7 @@ flowchart LR
   s3 -->|OAC| cf[CloudFront] -->|link in Telegram| user[Phone browser]
   ec2 -->|long polling| tg[Telegram API]
   ec2 --> wh[Willhaben]
+  ec2 --> ka[Kleinanzeigen]
   ec2 --> ai[Anthropic API]
 ```
 

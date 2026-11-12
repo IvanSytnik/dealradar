@@ -1,9 +1,13 @@
 # DealRadar
 
-[![CI](https://github.com/IvanSytnik/dealradar/actions/workflows/ci.yml/badge.svg)](https://github.com/IvanSytnik/dealradar/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/IvanSytnik/dealradar/ci.yml?branch=main&label=CI)](https://github.com/IvanSytnik/dealradar/actions/workflows/ci.yml)
+[![License: view-only](https://img.shields.io/badge/license-view--only-lightgrey)](LICENSE)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
 ![Node](https://img.shields.io/badge/Node-22-339933)
+![grammY](https://img.shields.io/badge/grammY-1.46-009dc2?logo=telegram&logoColor=white)
 ![AWS](https://img.shields.io/badge/AWS-EC2%20%C2%B7%20S3%20%C2%B7%20CloudFront-ff9900)
+
+**Contents:** [Why](#why-it-is-not-just-another-scraper) · [Features](#features) · [Architecture](#architecture) · [Run locally](#run-locally) · [Deploy](#deploy) · [Bot commands](#bot-commands) · [Known limitations](#known-limitations) · [Roadmap](#roadmap) · [Security](#security) · [License](#license)
 
 A Telegram bot that watches **willhaben.at** 🇦🇹 and **kleinanzeigen.de** 🇩🇪 searches and sends only the listings worth opening, with a deal score based on what that exact model really sells for.
 
@@ -20,7 +24,7 @@ Paste a search link (or just type `ps5 digital`). The bot works out what you are
 ## Why it is not just another scraper
 
 - **Per-model market prices.** One median over "PS5" mixes a 500 € Digital with a 1250 € Pro, so every Pro looks overpriced and every standard console looks like a deal. The AI picks the item's price-relevant variants once per watch, tags each listing with one, and each variant with at least 5 priced listings gets its own median. A listing that does not name its model is compared with the cheapest variant (sellers always name the expensive one), so it never shows a fake discount. Live Stuttgart PS5 search, 483 listings: Standard 535 €, Digital 500 €, Slim 550 €, Pro 1250 €; overall 600 €.
-- **Real numbers, not a model's guess.** Deal scores come from the median and quartiles of the live market. The AI judges relevance, condition, bundle and scam signals, never the price.
+- **Real numbers, not a model's guess.** The medians, quartiles and each listing's deviation from its model's median (📊) are plain arithmetic over the `/scan` sample, and so are the deal scores in the `/scan` report. The AI judges relevance, condition, bundle and scam signals, and in live alerts gives an overall deal score (⭐) with those real medians in its prompt; it never computes the market price.
 - **Rules first, AI second.** A German marketplace lexicon and per-watch rules drop most junk for free; only what passes costs an AI call, in batches of 20 with a cache and a daily budget per user.
 - **Polite by design.** One request per unique URL per cycle however many users watch it, a per-host queue, backoff with jitter, and a per-site floor (Kleinanzeigen: 10 min default, never under 5).
 
@@ -48,6 +52,39 @@ Paste a search link (or just type `ps5 digital`). The bot works out what you are
 
 ## Architecture
 
+How a live notification is produced (`Poller.tick()` in `src/services/poller.ts`):
+
+```mermaid
+flowchart TD
+  tick["Poller.tick() every TICK_SECONDS"] --> due["repo.dueWatches()<br/>active watches that are due"]
+  due --> group["Group watches by search URL<br/>one fetch per URL per cycle"]
+  group --> http["createHttpGet()<br/>per-host queue, HOST_MIN_GAP_MS"]
+  http --> sites[("willhaben.at<br/>kleinanzeigen.de")]
+  sites --> parse["SiteAdapter.parseListings()<br/>page 1, catch-up up to 4 pages"]
+  http -- "fetch error" --> backoff["Backoff with jitter<br/>user alert after 5 failures"]
+  parse --> health["HealthMonitor.record()<br/>owner alert via ADMIN_IDS"]
+  parse --> seen{"repo.checkSeen()<br/>per watch"}
+  seen -- "already seen" --> skip(["skip"])
+  seen -- "new or price drop" --> rules{"applyRules()<br/>marketplace lexicon + watch profile"}
+  rules -- "dropped" --> skip
+  rules -- "passed, AI off" --> notify
+  rules -- "passed, AI on" --> cache{"ai_cache hit?"}
+  cache -- "yes" --> verdict
+  cache -- "no" --> budget{"repo.takeAiCall()<br/>daily AI budget"}
+  budget -- "exhausted: rules only" --> notify
+  budget -- "ok" --> llm["Classifier → Anthropic API<br/>relevant, condition, bundle, score, variant"]
+  llm -- "error: rules only" --> notify
+  llm --> verdict{"relevant, score ≥ minScore,<br/>not broken unless allowed?"}
+  verdict -- "no" --> skip
+  verdict -- "yes" --> notify["listingText()<br/>price vs the model's median, max 10 per run"]
+  notify --> tg["TelegramNotifier.sendListing()<br/>photo or text with Open / 👎 / 👍"]
+  tg -. "👎 / 👍 feedback" .-> llm
+  scan["/scan: ScanService<br/>all pages, batch AI, per-model medians"] -. "watch.market" .-> llm
+  scan -. "watch.market" .-> notify
+```
+
+The 📊 line in a notification is computed from the stored medians; the ⭐ score is the AI verdict. Feedback taps become few-shot examples in the next classifier prompt.
+
 ```
 src/
   sites/        SiteAdapter interface, willhaben + kleinanzeigen adapters, polite per-host HTTP queue
@@ -58,11 +95,12 @@ src/
   report/       HTML report / Mini App, S3 publisher
   bot/          grammY handlers, pure command parsers, message formatting
   i18n/         de / en / uk / ru dictionaries (ru is the reference type)
+  tools/        probe: live check of a site adapter (npm run probe)
 tests/          vitest: unit, service, scheduler with fake clock, bot end-to-end, real-page fixtures
 infra/          Terraform: EC2, ECR, SSM, S3 + CloudFront, IAM, budgets
 ```
 
-The core does not depend on Telegram or Anthropic. Both sit behind ports (`Notifier`, `Llm`), so the scheduler and the bot are tested end-to-end without network access. 262 tests, `tsc --strict`, CI on every push.
+The core does not depend on Telegram or Anthropic. Both sit behind ports (`Notifier`, `Llm`), so the scheduler and the bot are tested end-to-end without network access. A vitest suite of unit, service and end-to-end tests, `tsc --strict`, CI on every push to `main` and every pull request.
 
 **Adding a marketplace:** implement `SiteAdapter` (`matches`, `parseSearchUrl`, `searchUrlFromText`, `pageUrl`, `parseListings`, optional `minIntervalSec`), register it in `sites/index.ts`, add a fixture test from a real page, and check it with the probe below. The lexicon is German; a non-German site needs its own.
 
@@ -115,10 +153,62 @@ Marketplaces may rate-limit data-center IPs. The bot backs off automatically, al
 
 Deep link `t.me/<bot>?start=<base64url keyword>` creates a watch straight from a landing page.
 
+### Example dialogue
+
+> **Illustrative values.** The layout below was rendered with the bot's real English templates (`src/bot/format.ts`, `src/i18n/en.ts`). Titles, places, prices, counts and the AI note are placeholders, not real listings or market data. In Telegram the messages use bold, links and inline buttons, shown here as `[…]`.
+
+```text
+You:  ps5
+
+Bot:  Watch “ps5” on Willhaben across Austria?
+      For a region, category or price, send a search link with those filters instead.
+      [✅ Yes] [Cancel]
+
+You:  [✅ Yes]
+
+Bot:  ✅ Done. The AI worked out what you're after and built the filter:
+
+      #1 ps5 🟢
+      🎯 ‹item the AI understood›
+      💶 Price: any
+      📊 Market: tap “Market analysis” to see real prices
+      ⏱ Every 5 min · 🤖 AI on
+      🔗 Open search
+      [⏸ Pause] [📊 Market analysis]
+      [⚙️ Settings] [🧪 Preview]
+      [« All watches]
+
+Bot:  30 listings on the site right now, 1 match the filter.
+      AI checked 1 of those that passed the rules.
+
+      ✅ Passed:
+      • ‹listing title A› · 450 €
+
+      🗑 Dropped by rules: 1 (accessory 1), e.g.:
+      • ‹listing title B› · accessory "controller"
+
+      I've remembered the current listings. You'll only get new ones and price drops.
+
+      … later, after a 📊 Market analysis has stored the medians:
+
+Bot:  🆕 ps5
+      ‹listing title›
+      💶 450 €
+      📍 ‹district›
+      📊 10% below median (Digital median 500 €)
+      📦 ‹extra›
+      ⭐ 7/10 · ‹AI note›
+      [Open]
+      [👎 Not it] [👍 Good one]
+```
+
+A price drop starts with `📉 Price dropped · ps5` and shows the old price struck through next to the new one.
+
 ## Known limitations
 
 - **Parsers follow the sites' current markup:** Willhaben's `__NEXT_DATA__` (`searchResult.advertSummaryList`) and Kleinanzeigen's `article[data-adid]` cards, both verified live in October 2026 with real-page fixtures. A change breaks one file and triggers the health alert.
 - Exclusions match word prefixes (`huelle` hits `Hüllen`), not compound suffixes (`Schutzhülle`). The AI layer covers that; a German decompounder would be better.
+- The AI prompts (`src/ai/profile.ts`, `classifier.ts`, `batch.ts`) still describe every listing as coming from "the Austrian marketplace Willhaben", and the live classifier judges deals by "typical Austrian used prices", even for Kleinanzeigen listings from Germany. The medians from `/scan` are per search and not affected.
 - Variant medians need enough listings: a model with fewer than 5 priced listings falls back to the overall median.
 - Scraping is subject to the marketplaces' terms. Request rates stay low and the data is not resold.
 
@@ -130,3 +220,13 @@ Deep link `t.me/<bot>?start=<base64url keyword>` creates a watch straight from a
 4. **Finds as tags:** low firmware, warranty, sealed box, already noticed by the AI, surfaced as filters.
 5. **Scale:** Postgres and separate poller workers past ~2k active watches; webhooks instead of long polling.
 6. **Observability:** Sentry, uptime ping, CloudWatch alarm on the error log pattern.
+
+## Security
+
+Please report vulnerabilities privately, not in public issues. See [SECURITY.md](SECURITY.md).
+
+## License
+
+View-only, all rights reserved: see [LICENSE](LICENSE). You may read the code; using, copying, modifying, deploying or running it needs written permission from the author.
+
+Deployment and extension sections in this README are technical documentation for the author's setup and portfolio review, not a grant of license.
