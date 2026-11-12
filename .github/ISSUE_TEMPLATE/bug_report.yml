@@ -1,0 +1,58 @@
+name: Bug report
+description: Something in the bot, a marketplace parser or the deployment does not work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please do **not** paste bot tokens, API keys, `.env` or `terraform.tfstate` contents,
+        or other people's personal data. Security issues go through a private advisory instead (see SECURITY.md).
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Alerts for a watch (missing, duplicate or junk listings)
+        - Willhaben parsing
+        - Kleinanzeigen parsing
+        - AI filter profile or verdicts
+        - Market analysis (/scan) or the report / Mini App
+        - Bot commands, buttons or texts
+        - Deployment (Docker, Terraform, GitHub Actions)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did and what the bot did.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: search-url
+    attributes:
+      label: Search link or query
+      description: The marketplace search URL or the text you sent, if the bug is about a watch or /scan.
+      placeholder: https://www.willhaben.at/iad/kaufen-und-verkaufen/marktplatz?keyword=...
+  - type: dropdown
+    id: language
+    attributes:
+      label: Bot language
+      options:
+        - de
+        - en
+        - uk
+        - ru
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or output
+      description: Relevant log lines (JSON from the bot, `npm run probe` output, workflow log). Remove tokens and IDs first.
+      render: shell
