@@ -52,6 +52,39 @@ Paste a search link (or just type `ps5 digital`). The bot works out what you are
 
 ## Architecture
 
+How a live notification is produced (`Poller.tick()` in `src/services/poller.ts`):
+
+```mermaid
+flowchart TD
+  tick["Poller.tick() every TICK_SECONDS"] --> due["repo.dueWatches()<br/>active watches that are due"]
+  due --> group["Group watches by search URL<br/>one fetch per URL per cycle"]
+  group --> http["createHttpGet()<br/>per-host queue, HOST_MIN_GAP_MS"]
+  http --> sites[("willhaben.at<br/>kleinanzeigen.de")]
+  sites --> parse["SiteAdapter.parseListings()<br/>page 1, catch-up up to 4 pages"]
+  http -- "fetch error" --> backoff["Backoff with jitter<br/>user alert after 5 failures"]
+  parse --> health["HealthMonitor.record()<br/>owner alert via ADMIN_IDS"]
+  parse --> seen{"repo.checkSeen()<br/>per watch"}
+  seen -- "already seen" --> skip(["skip"])
+  seen -- "new or price drop" --> rules{"applyRules()<br/>marketplace lexicon + watch profile"}
+  rules -- "dropped" --> skip
+  rules -- "passed, AI off" --> notify
+  rules -- "passed, AI on" --> cache{"ai_cache hit?"}
+  cache -- "yes" --> verdict
+  cache -- "no" --> budget{"repo.takeAiCall()<br/>daily AI budget"}
+  budget -- "exhausted: rules only" --> notify
+  budget -- "ok" --> llm["Classifier → Anthropic API<br/>relevant, condition, bundle, score, variant"]
+  llm -- "error: rules only" --> notify
+  llm --> verdict{"relevant, score ≥ minScore,<br/>not broken unless allowed?"}
+  verdict -- "no" --> skip
+  verdict -- "yes" --> notify["listingText()<br/>price vs the model's median, max 10 per run"]
+  notify --> tg["TelegramNotifier.sendListing()<br/>photo or text with Open / 👎 / 👍"]
+  tg -. "👎 / 👍 feedback" .-> llm
+  scan["/scan: ScanService<br/>all pages, batch AI, per-model medians"] -. "watch.market" .-> llm
+  scan -. "watch.market" .-> notify
+```
+
+The 📊 line in a notification is computed from the stored medians; the ⭐ score is the AI verdict. Feedback taps become few-shot examples in the next classifier prompt.
+
 ```
 src/
   sites/        SiteAdapter interface, willhaben + kleinanzeigen adapters, polite per-host HTTP queue
@@ -62,11 +95,12 @@ src/
   report/       HTML report / Mini App, S3 publisher
   bot/          grammY handlers, pure command parsers, message formatting
   i18n/         de / en / uk / ru dictionaries (ru is the reference type)
+  tools/        probe: live check of a site adapter (npm run probe)
 tests/          vitest: unit, service, scheduler with fake clock, bot end-to-end, real-page fixtures
 infra/          Terraform: EC2, ECR, SSM, S3 + CloudFront, IAM, budgets
 ```
 
-The core does not depend on Telegram or Anthropic. Both sit behind ports (`Notifier`, `Llm`), so the scheduler and the bot are tested end-to-end without network access. 262 tests, `tsc --strict`, CI on every push.
+The core does not depend on Telegram or Anthropic. Both sit behind ports (`Notifier`, `Llm`), so the scheduler and the bot are tested end-to-end without network access. 263 tests, `tsc --strict`, CI on every push to `main` and every pull request.
 
 **Adding a marketplace:** implement `SiteAdapter` (`matches`, `parseSearchUrl`, `searchUrlFromText`, `pageUrl`, `parseListings`, optional `minIntervalSec`), register it in `sites/index.ts`, add a fixture test from a real page, and check it with the probe below. The lexicon is German; a non-German site needs its own.
 
