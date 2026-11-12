@@ -1,9 +1,13 @@
 # DealRadar
 
-[![CI](https://github.com/IvanSytnik/dealradar/actions/workflows/ci.yml/badge.svg)](https://github.com/IvanSytnik/dealradar/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/IvanSytnik/dealradar/ci.yml?branch=main&label=CI)](https://github.com/IvanSytnik/dealradar/actions/workflows/ci.yml)
+[![License: view-only](https://img.shields.io/badge/license-view--only-lightgrey)](LICENSE)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
 ![Node](https://img.shields.io/badge/Node-22-339933)
+![grammY](https://img.shields.io/badge/grammY-1.46-009dc2?logo=telegram&logoColor=white)
 ![AWS](https://img.shields.io/badge/AWS-EC2%20%C2%B7%20S3%20%C2%B7%20CloudFront-ff9900)
+
+**Contents:** [Why](#why-it-is-not-just-another-scraper) · [Features](#features) · [Architecture](#architecture) · [Run locally](#run-locally) · [Deploy](#deploy) · [Bot commands](#bot-commands) · [Known limitations](#known-limitations) · [Roadmap](#roadmap) · [Security](#security) · [License](#license)
 
 A Telegram bot that watches **willhaben.at** 🇦🇹 and **kleinanzeigen.de** 🇩🇪 searches and sends only the listings worth opening, with a deal score based on what that exact model really sells for.
 
