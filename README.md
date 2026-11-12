@@ -100,7 +100,7 @@ tests/          vitest: unit, service, scheduler with fake clock, bot end-to-end
 infra/          Terraform: EC2, ECR, SSM, S3 + CloudFront, IAM, budgets
 ```
 
-The core does not depend on Telegram or Anthropic. Both sit behind ports (`Notifier`, `Llm`), so the scheduler and the bot are tested end-to-end without network access. 263 tests, `tsc --strict`, CI on every push to `main` and every pull request.
+The core does not depend on Telegram or Anthropic. Both sit behind ports (`Notifier`, `Llm`), so the scheduler and the bot are tested end-to-end without network access. A vitest suite of unit, service and end-to-end tests, `tsc --strict`, CI on every push to `main` and every pull request.
 
 **Adding a marketplace:** implement `SiteAdapter` (`matches`, `parseSearchUrl`, `searchUrlFromText`, `pageUrl`, `parseListings`, optional `minIntervalSec`), register it in `sites/index.ts`, add a fixture test from a real page, and check it with the probe below. The lexicon is German; a non-German site needs its own.
 
