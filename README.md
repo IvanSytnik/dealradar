@@ -208,6 +208,7 @@ A price drop starts with `📉 Price dropped · ps5` and shows the old price str
 
 - **Parsers follow the sites' current markup:** Willhaben's `__NEXT_DATA__` (`searchResult.advertSummaryList`) and Kleinanzeigen's `article[data-adid]` cards, both verified live in October 2026 with real-page fixtures. A change breaks one file and triggers the health alert.
 - Exclusions match word prefixes (`huelle` hits `Hüllen`), not compound suffixes (`Schutzhülle`). The AI layer covers that; a German decompounder would be better.
+- The AI prompts (`src/ai/profile.ts`, `classifier.ts`, `batch.ts`) still describe every listing as coming from "the Austrian marketplace Willhaben", and the live classifier judges deals by "typical Austrian used prices", even for Kleinanzeigen listings from Germany. The medians from `/scan` are per search and not affected.
 - Variant medians need enough listings: a model with fewer than 5 priced listings falls back to the overall median.
 - Scraping is subject to the marketplaces' terms. Request rates stay low and the data is not resold.
 
