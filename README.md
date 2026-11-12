@@ -24,7 +24,7 @@ Paste a search link (or just type `ps5 digital`). The bot works out what you are
 ## Why it is not just another scraper
 
 - **Per-model market prices.** One median over "PS5" mixes a 500 € Digital with a 1250 € Pro, so every Pro looks overpriced and every standard console looks like a deal. The AI picks the item's price-relevant variants once per watch, tags each listing with one, and each variant with at least 5 priced listings gets its own median. A listing that does not name its model is compared with the cheapest variant (sellers always name the expensive one), so it never shows a fake discount. Live Stuttgart PS5 search, 483 listings: Standard 535 €, Digital 500 €, Slim 550 €, Pro 1250 €; overall 600 €.
-- **Real numbers, not a model's guess.** Deal scores come from the median and quartiles of the live market. The AI judges relevance, condition, bundle and scam signals, never the price.
+- **Real numbers, not a model's guess.** The medians, quartiles and each listing's deviation from its model's median (📊) are plain arithmetic over the `/scan` sample, and so are the deal scores in the `/scan` report. The AI judges relevance, condition, bundle and scam signals, and in live alerts gives an overall deal score (⭐) with those real medians in its prompt; it never computes the market price.
 - **Rules first, AI second.** A German marketplace lexicon and per-watch rules drop most junk for free; only what passes costs an AI call, in batches of 20 with a cache and a daily budget per user.
 - **Polite by design.** One request per unique URL per cycle however many users watch it, a per-host queue, backoff with jitter, and a per-site floor (Kleinanzeigen: 10 min default, never under 5).
 
